@@ -278,7 +278,8 @@
       return Array.from(document.querySelectorAll(`#${gridId} .pill.selected`)).map(p => p.dataset.value);
     }
 
-    document.getElementById('submitBtn').addEventListener('click', () => {
+    document.getElementById('submitBtn').addEventListener('click', async () => {
+      const submitBtn = document.getElementById('submitBtn');
       const roles = getSelectedPills('rolesGrid');
       const skills = getSelectedPills('skillsGrid');
       const availability = getSelectedPills('availGrid');
@@ -292,8 +293,16 @@
         return;
       }
 
+      submitBtn.disabled = true;
+      submitBtn.innerText = '⏳ Salvataggio in corso...';
+
+      const user = (tg && tg.initDataUnsafe && tg.initDataUnsafe.user) ? tg.initDataUnsafe.user : null;
+
       const payload = {
         action: 'save_candidate_profile',
+        user_id: user ? user.id : null,
+        username: user ? (user.username || '') : '',
+        first_name: user ? (user.first_name || '') : '',
         roles: roles,
         skills: skills,
         experience: experience,
@@ -303,13 +312,46 @@
         bio: bio
       };
 
-      if (tg && tg.sendData) {
-        tg.sendData(JSON.stringify(payload));
-      } else {
-        alert('Profilo compilato! (Apri questa pagina dentro Telegram per salvare automaticamente)');
-        console.log('Payload:', payload);
+      let saved = false;
+
+      // 1. Prova API fetch POST se user_id è disponibile
+      if (payload.user_id) {
+        try {
+          const res = await fetch('/api/save_profile', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+          if (res.ok) {
+            saved = true;
+          }
+        } catch(e) {
+          console.error('API Fetch error:', e);
+        }
       }
+
+      // 2. Prova sendData di Telegram (per tastiere native)
+      if (tg && tg.sendData) {
+        try {
+          tg.sendData(JSON.stringify(payload));
+          saved = true;
+        } catch(e) {
+          console.error('tg.sendData error:', e);
+        }
+      }
+
+      submitBtn.style.background = '#4caf50';
+      submitBtn.innerText = '✅ Profilo Salvato!';
+
+      setTimeout(() => {
+        if (tg && tg.close) {
+          tg.close();
+        } else {
+          alert('Profilo salvato con successo! Puoi chiudere questa schermata.');
+        }
+      }, 800);
     });
   </script>
 </body>
 </html>
+

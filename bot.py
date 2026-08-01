@@ -6,7 +6,16 @@ import logging
 import json
 from datetime import datetime
 
-from telegram import Update, ChatPermissions, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
+from telegram import (
+    Update,
+    ChatPermissions,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    ReplyKeyboardMarkup,
+    KeyboardButton,
+    WebAppInfo,
+)
+
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -432,15 +441,19 @@ async def on_link_approval(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def cmd_registrati(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Comando /registrati — apre la Telegram WebApp per registrare il profilo candidato."""
-    keyboard = InlineKeyboardMarkup([
+    reply_keyboard = ReplyKeyboardMarkup(
+        [[KeyboardButton("🍸 Apri Scheda Registrazione Profilo", web_app=WebAppInfo(url=config.WEBAPP_URL))]],
+        resize_keyboard=True
+    )
+    inline_keyboard = InlineKeyboardMarkup([
         [InlineKeyboardButton("🍸 Compila Profilo Candidato", web_app=WebAppInfo(url=config.WEBAPP_URL))]
     ])
     msg = (
         "💼 *REGISTRAZIONE PROFILO CANDIDATO*\n\n"
         "Crea o aggiorna la tua scheda profilo per ricevere offerte di lavoro su misura a Torino!\n\n"
-        "Clicca sul pulsante qui sotto per aprire la scheda di registrazione:"
+        "Clicca sul pulsante in basso per aprire la scheda di registrazione:"
     )
-    await update.message.reply_text(msg, reply_markup=keyboard, parse_mode=ParseMode.MARKDOWN)
+    await update.message.reply_text(msg, reply_markup=reply_keyboard, parse_mode=ParseMode.MARKDOWN)
 
 
 async def cmd_profilo(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -449,9 +462,10 @@ async def cmd_profilo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     profile = db.get_candidate_profile(user.id)
 
     if not profile:
-        keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("📝 Crea Profilo Ora", web_app=WebAppInfo(url=config.WEBAPP_URL))]
-        ])
+        keyboard = ReplyKeyboardMarkup(
+            [[KeyboardButton("📝 Crea Profilo Ora", web_app=WebAppInfo(url=config.WEBAPP_URL))]],
+            resize_keyboard=True
+        )
         await update.message.reply_text(
             "❌ Non hai ancora registrato il tuo profilo candidato!\n\n"
             "Clicca sul pulsante qui sotto per crearlo in 1 minuto:",
@@ -474,14 +488,16 @@ async def cmd_profilo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"📍 *Zone preferite:* {zones}\n"
         f"📱 *Telefono:* {profile['phone'] or 'Non fornito'}\n"
         f"📝 *Note:* {profile['bio'] or 'Nessuna'}\n\n"
-        f"🔄 Per aggiornare i dati, usa `/registrati` o clicca sul pulsante:"
+        f"🔄 Per aggiornare i dati, usa `/registrati` o clicca sul pulsante in basso."
     )
 
-    keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("✏️ Modifica Profilo", web_app=WebAppInfo(url=config.WEBAPP_URL))]
-    ])
+    keyboard = ReplyKeyboardMarkup(
+        [[KeyboardButton("✏️ Modifica Profilo", web_app=WebAppInfo(url=config.WEBAPP_URL))]],
+        resize_keyboard=True
+    )
 
     await update.message.reply_text(msg, reply_markup=keyboard, parse_mode=ParseMode.MARKDOWN)
+
 
 
 async def on_webapp_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
