@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Profilo Candidato Horeca Torino</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+    :root {
+      --bg-color: var(--tg-theme-bg-color, #17212b);
+      --text-color: var(--tg-theme-text-color, #f5f5f5);
+      --hint-color: var(--tg-theme-hint-color, #708499);
+      --button-color: var(--tg-theme-button-color, #2481cc);
+      --button-text: var(--tg-theme-button-text-color, #ffffff);
+      --secondary-bg: var(--tg-theme-secondary-bg-color, #232e3c);
+      --border-color: rgba(255, 255, 255, 0.08);
+      --accent-color: #e53935;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      background-color: var(--bg-color);
+      color: var(--text-color);
+      padding: 16px;
+      padding-bottom: 90px;
+    }
+
+    .header {
+      text-align: center;
+      margin-bottom: 24px;
+    }
+
+    .header-icon {
+      font-size: 40px;
+      margin-bottom: 8px;
+    }
+
+    .header h1 {
+      font-size: 20px;
+      font-weight: 700;
+    }
+
+    .header p {
+      font-size: 13px;
+      color: var(--hint-color);
+      margin-top: 4px;
+    }
+
+    .section {
+      background: var(--secondary-bg);
+      border-radius: 14px;
+      padding: 16px;
+      margin-bottom: 16px;
+      border: 1px solid var(--border-color);
+    }
+
+    .section-title {
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--text-color);
+    }
+
+    .pills-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .pill {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border-color);
+      border-radius: 20px;
+      padding: 8px 14px;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-color);
+      cursor: pointer;
+      transition: all 0.15s ease;
+      user-select: none;
+    }
+
+    .pill.selected {
+      background: var(--button-color);
+      color: var(--button-text);
+      border-color: var(--button-color);
+    }
+
+    .input-group {
+      margin-bottom: 12px;
+    }
+
+    .input-group:last-child {
+      margin-bottom: 0;
+    }
+
+    label {
+      display: block;
+      font-size: 12px;
+      color: var(--hint-color);
+      margin-bottom: 6px;
+    }
+
+    input, textarea, select {
+      width: 100%;
+      background: rgba(0, 0, 0, 0.2);
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      padding: 12px;
+      font-size: 14px;
+      color: var(--text-color);
+      outline: none;
+    }
+
+    input:focus, textarea:focus, select:focus {
+      border-color: var(--button-color);
+    }
+
+    textarea {
+      resize: none;
+      height: 70px;
+    }
+
+    .footer-btn-container {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: var(--bg-color);
+      padding: 12px 16px;
+      border-top: 1px solid var(--border-color);
+      z-index: 100;
+    }
+
+    .btn-submit {
+      width: 100%;
+      background: var(--button-color);
+      color: var(--button-text);
+      border: none;
+      border-radius: 12px;
+      padding: 14px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .btn-submit:active {
+      opacity: 0.85;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <div class="header-icon">🍸</div>
+    <h1>Profilo Candidato Horeca</h1>
+    <p>Registra le tue skill per ricevere offerte di lavoro su misura a Torino</p>
+  </div>
+
+  <form id="profileForm">
+    <!-- RUOLI -->
+    <div class="section">
+      <div class="section-title">💼 Ruolo/i cercati (seleziona anche più di uno)</div>
+      <div class="pills-grid" id="rolesGrid">
+        <div class="pill" data-value="Barista">☕ Barista</div>
+        <div class="pill" data-value="Bartender">🍹 Bartender</div>
+        <div class="pill" data-value="Cameriere">🍽️ Cameriere/a</div>
+        <div class="pill" data-value="Cuoco">👨‍🍳 Cuoco/a</div>
+        <div class="pill" data-value="Aiuto Cuoco">🍳 Aiuto Cuoco</div>
+        <div class="pill" data-value="Lavapiatti">🧽 Lavapiatti</div>
+        <div class="pill" data-value="Responsabile">📊 Responsabile Bar/Sala</div>
+      </div>
+    </div>
+
+    <!-- SKILL -->
+    <div class="section">
+      <div class="section-title">⚡ Competenze & Skill</div>
+      <div class="pills-grid" id="skillsGrid">
+        <div class="pill" data-value="Latte Art">🥛 Latte Art</div>
+        <div class="pill" data-value="Cocktails">🍸 Mixology / Cocktails</div>
+        <div class="pill" data-value="Cassa/POS">💳 Gestione Cassa / POS</div>
+        <div class="pill" data-value="HACCP">📜 Attestato HACCP</div>
+        <div class="pill" data-value="Inglese">🇬🇧 Inglese parlato</div>
+        <div class="pill" data-value="Sommelier">🍷 Vini / Sommelier</div>
+        <div class="pill" data-value="Caffetteria avanzata">☕ Caffetteria Avanzata</div>
+        <div class="pill" data-value="Cucina calda">🔥 Cucina Calda</div>
+        <div class="pill" data-value="Pasticceria">🍰 Pasticceria</div>
+      </div>
+    </div>
+
+    <!-- ESPERIENZA & DISPONIBILITÀ -->
+    <div class="section">
+      <div class="section-title">⏳ Esperienza & Turni</div>
+      <div class="input-group">
+        <label>Anni di esperienza nel settore</label>
+        <select id="experienceSelect">
+          <option value="Meno di 1 anno">Meno di 1 anno (Junior)</option>
+          <option value="1-3 anni" selected>1 - 3 anni (Intermedio)</option>
+          <option value="Più di 3 anni">Più di 3 anni (Senior)</option>
+        </select>
+      </div>
+
+      <div style="margin-top: 12px;">
+        <label style="margin-bottom: 6px; display: block;">Disponibilità lavorativa</label>
+        <div class="pills-grid" id="availGrid">
+          <div class="pill" data-value="Full-time">Full-time</div>
+          <div class="pill" data-value="Part-time">Part-time</div>
+          <div class="pill" data-value="Extra / Chiamata">Extra / Chiamata</div>
+          <div class="pill" data-value="Turni Notturni">Turni Notturni</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ZONE DI TORINO -->
+    <div class="section">
+      <div class="section-title">📍 Zone di Torino preferite</div>
+      <div class="pills-grid" id="zonesGrid">
+        <div class="pill" data-value="Centro">Centro</div>
+        <div class="pill" data-value="San Salvario">San Salvario</div>
+        <div class="pill" data-value="Crocetta">Crocetta</div>
+        <div class="pill" data-value="Vanchiglia">Vanchiglia</div>
+        <div class="pill" data-value="Santa Rita">Santa Rita</div>
+        <div class="pill" data-value="Pozzo Strada">Pozzo Strada</div>
+        <div class="pill" data-value="Barriera di Milano">Barriera di Milano</div>
+        <div class="pill" data-value="Lingotto">Lingotto</div>
+        <div class="pill" data-value="San Donato">San Donato</div>
+        <div class="pill" data-value="Provincia di Torino">Provincia di Torino</div>
+      </div>
+    </div>
+
+    <!-- CONTATTI -->
+    <div class="section">
+      <div class="section-title">📱 Contatto & Presentazione</div>
+      <div class="input-group">
+        <label>Numero di telefono / WhatsApp (opzionale per i datori)</label>
+        <input type="tel" id="phoneInput" placeholder="es. +39 340 1234567">
+      </div>
+      <div class="input-group">
+        <label>Breve descrizione / Note personali</label>
+        <textarea id="bioInput" placeholder="es. Ho lavorato 2 anni in un lounge bar in centro, cerco posto fisso o extra weekend..."></textarea>
+      </div>
+    </div>
+  </form>
+
+  <div class="footer-btn-container">
+    <button type="button" class="btn-submit" id="submitBtn">✅ Salva Profilo Candidato</button>
+  </div>
+
+  <script>
+    const tg = window.Telegram ? window.Telegram.WebApp : null;
+    if (tg) {
+      tg.expand();
+      tg.ready();
+    }
+
+    // Handle pills selection
+    document.querySelectorAll('.pills-grid').forEach(grid => {
+      grid.addEventListener('click', (e) => {
+        const pill = e.target.closest('.pill');
+        if (!pill) return;
+        pill.classList.toggle('selected');
+      });
+    });
+
+    function getSelectedPills(gridId) {
+      return Array.from(document.querySelectorAll(`#${gridId} .pill.selected`)).map(p => p.dataset.value);
+    }
+
+    document.getElementById('submitBtn').addEventListener('click', () => {
+      const roles = getSelectedPills('rolesGrid');
+      const skills = getSelectedPills('skillsGrid');
+      const availability = getSelectedPills('availGrid');
+      const zones = getSelectedPills('zonesGrid');
+      const experience = document.getElementById('experienceSelect').value;
+      const phone = document.getElementById('phoneInput').value.trim();
+      const bio = document.getElementById('bioInput').value.trim();
+
+      if (roles.length === 0) {
+        alert('Seleziona almeno un ruolo!');
+        return;
+      }
+
+      const payload = {
+        action: 'save_candidate_profile',
+        roles: roles,
+        skills: skills,
+        experience: experience,
+        availability: availability,
+        zones: zones,
+        phone: phone,
+        bio: bio
+      };
+
+      if (tg && tg.sendData) {
+        tg.sendData(JSON.stringify(payload));
+      } else {
+        alert('Profilo compilato! (Apri questa pagina dentro Telegram per salvare automaticamente)');
+        console.log('Payload:', payload);
+      }
+    });
+  </script>
+</body>
+</html>

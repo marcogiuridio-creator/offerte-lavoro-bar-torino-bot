@@ -51,7 +51,25 @@ def init_db():
             richieste   INTEGER DEFAULT 0,
             spam_blocked INTEGER DEFAULT 0
         );
+
+        CREATE TABLE IF NOT EXISTS candidate_profiles (
+            user_id         INTEGER PRIMARY KEY,
+            username        TEXT,
+            first_name      TEXT,
+            roles           TEXT,
+            skills          TEXT,
+            experience      TEXT,
+            availability    TEXT,
+            zones           TEXT,
+            phone           TEXT,
+            bio             TEXT,
+            is_premium      INTEGER DEFAULT 0,
+            created_at      TEXT DEFAULT (datetime('now')),
+            updated_at      TEXT DEFAULT (datetime('now')),
+            FOREIGN KEY (user_id) REFERENCES users(user_id)
+        );
         """)
+
 
 
 # ─── Users ────────────────────────────────────────────────────────────────────
@@ -227,3 +245,54 @@ def set_featured(message_id: int, hours: int = 24):
             UPDATE posts SET is_featured = 1, featured_until = ?
             WHERE message_id = ?
         """, (until, message_id))
+
+
+# ─── Candidate Profiles ────────────────────────────────────────────────────────
+
+def save_candidate_profile(
+    user_id: int,
+    username: str,
+    first_name: str,
+    roles: str,
+    skills: str,
+    experience: str,
+    availability: str,
+    zones: str,
+    phone: str = "",
+    bio: str = ""
+):
+    """Salva o aggiorna il profilo del candidato."""
+    now = datetime.now().isoformat()
+    with get_conn() as conn:
+        conn.execute("""
+            INSERT INTO candidate_profiles (
+                user_id, username, first_name, roles, skills, experience, availability, zones, phone, bio, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(user_id) DO UPDATE SET
+                username     = excluded.username,
+                first_name   = excluded.first_name,
+                roles        = excluded.roles,
+                skills       = excluded.skills,
+                experience   = excluded.experience,
+                availability = excluded.availability,
+                zones        = excluded.zones,
+                phone        = excluded.phone,
+                bio          = excluded.bio,
+                updated_at   = excluded.updated_at
+        """, (user_id, username, first_name, roles, skills, experience, availability, zones, phone, bio, now))
+
+
+def get_candidate_profile(user_id: int):
+    """Recupera il profilo candidato di un utente."""
+    with get_conn() as conn:
+        return conn.execute("SELECT * FROM candidate_profiles WHERE user_id = ?", (user_id,)).fetchone()
+
+
+def get_all_candidates(limit: int = 50):
+    """Recupera la lista dei candidati salvati."""
+    with get_conn() as conn:
+        return conn.execute("""
+            SELECT * FROM candidate_profiles
+            ORDER BY updated_at DESC
+            LIMIT ?
+        """, (limit,)).fetchall()

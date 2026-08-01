@@ -3,9 +3,10 @@ Bot principale — Offerte Lavoro Bar Torino
 """
 
 import logging
+import json
 from datetime import datetime
 
-from telegram import Update, ChatPermissions, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update, ChatPermissions, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -19,7 +20,9 @@ from telegram.constants import ParseMode
 
 import config
 import database as db
+import server
 from classifier import classify, has_external_link, get_category_emoji, format_category_label
+
 
 # ─── Logging ───────────────────────────────────────────────────────────────────
 logging.basicConfig(
@@ -425,11 +428,113 @@ async def on_link_approval(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.info(f"🚫 Admin ha rifiutato link (msg {msg_id})")
 
 
+# ─── WebApp & Profilo Candidato ─────────────────────────────────────────────
+
+async def cmd_registrati(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Comando /registrati — apre la Telegram WebApp per registrare il profilo candidato."""
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("🍸 Compila Profilo Candidato", web_app=WebAppInfo(url=config.WEBAPP_URL))]
+    ])
+    msg = (
+        "💼 *REGISTRAZIONE PROFILO CANDIDATO*\n\n"
+        "Crea o aggiorna la tua scheda profilo per ricevere offerte di lavoro su misura a Torino!\n\n"
+        "Clicca sul pulsante qui sotto per aprire la scheda di registrazione:"
+    )
+    await update.message.reply_text(msg, reply_markup=keyboard, parse_mode=ParseMode.MARKDOWN)
+
+
+async def cmd_profilo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Comando /profilo — mostra il profilo candidato salvato."""
+    user = update.effective_user
+    profile = db.get_candidate_profile(user.id)
+
+    if not profile:
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("📝 Crea Profilo Ora", web_app=WebAppInfo(url=config.WEBAPP_URL))]
+        ])
+        await update.message.reply_text(
+            "❌ Non hai ancora registrato il tuo profilo candidato!\n\n"
+            "Clicca sul pulsante qui sotto per crearlo in 1 minuto:",
+            reply_markup=keyboard,
+            parse_mode=ParseMode.MARKDOWN
+        )
+        return
+
+    roles = ", ".join(json.loads(profile["roles"])) if profile["roles"] else "Non specificato"
+    skills = ", ".join(json.loads(profile["skills"])) if profile["skills"] else "Nessuna"
+    zones = ", ".join(json.loads(profile["zones"])) if profile["zones"] else "Tutta Torino"
+    avail = ", ".join(json.loads(profile["availability"])) if profile["availability"] else "Non specificata"
+
+    msg = (
+        f"👤 *IL TUO PROFILO CANDIDATO HORECA*\n\n"
+        f"💼 *Ruoli:* {roles}\n"
+        f"⚡ *Skill:* {skills}\n"
+        f"⏳ *Esperienza:* {profile['experience'] or 'N/D'}\n"
+        f"⏰ *Disponibilità:* {avail}\n"
+        f"📍 *Zone preferite:* {zones}\n"
+        f"📱 *Telefono:* {profile['phone'] or 'Non fornito'}\n"
+        f"📝 *Note:* {profile['bio'] or 'Nessuna'}\n\n"
+        f"🔄 Per aggiornare i dati, usa `/registrati` o clicca sul pulsante:"
+    )
+
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("✏️ Modifica Profilo", web_app=WebAppInfo(url=config.WEBAPP_URL))]
+    ])
+
+    await update.message.reply_text(msg, reply_markup=keyboard, parse_mode=ParseMode.MARKDOWN)
+
+
+async def on_webapp_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Riceve i dati inviati dalla Telegram WebApp."""
+    user = update.effective_user
+    data_str = update.effective_message.web_app_data.data
+
+    try:
+        data = json.loads(data_str)
+        if data.get("action") == "save_candidate_profile":
+            roles = json.dumps(data.get("roles", []))
+            skills = json.dumps(data.get("skills", []))
+            experience = data.get("experience", "")
+            availability = json.dumps(data.get("availability", []))
+            zones = json.dumps(data.get("zones", []))
+            phone = data.get("phone", "")
+            bio = data.get("bio", "")
+
+            db.save_candidate_profile(
+                user_id=user.id,
+                username=user.username or "",
+                first_name=user.first_name or "",
+                roles=roles,
+                skills=skills,
+                experience=experience,
+                availability=availability,
+                zones=zones,
+                phone=phone,
+                bio=bio
+            )
+
+            logger.info(f"✅ Profilo candidato salvato per user_id {user.id} (@{user.username})")
+
+            await update.effective_message.reply_text(
+                "🎉 *PROFILO SALVATO CON SUCCESSO!*\n\n"
+                "Le tue preferenze e competenze sono state registrate nel sistema.\n"
+                "Ora riceverai notifiche mirate quando vengono pubblicati annunci in target con il tuo profilo a Torino!\n\n"
+                "Per rivedere i tuoi dati in qualsiasi momento scrivi `/profilo`.",
+                parse_mode=ParseMode.MARKDOWN
+            )
+    except Exception as e:
+        logger.error(f"Errore salvataggio dati WebApp: {e}")
+        await update.effective_message.reply_text("❌ Si è verificato un errore durante il salvataggio. Riprova con `/registrati`.")
+
+
 # ─── Main ──────────────────────────────────────────────────────────────────────────────
 
 def main():
     db.init_db()
     logger.info("✅ Database inizializzato")
+
+    # Avvia server WebApp in background per la porta Railway
+    server.start_web_server()
 
     if not config.BOT_TOKEN:
         raise ValueError("❌ BOT_TOKEN mancante! Imposta la variabile d'ambiente BOT_TOKEN.")
@@ -447,6 +552,11 @@ def main():
     app.add_handler(CommandHandler("regole", cmd_regole))
     app.add_handler(CommandHandler("formato", cmd_formato))
     app.add_handler(CommandHandler("evidenza", cmd_evidenza))
+    app.add_handler(CommandHandler("registrati", cmd_registrati))
+    app.add_handler(CommandHandler("profilo", cmd_profilo))
+
+    # Data da WebApp Telegram
+    app.add_handler(MessageHandler(filters.StatusUpdate.WEB_APP_DATA, on_webapp_data))
 
     # Messaggi nel gruppo
     app.add_handler(MessageHandler(
@@ -462,6 +572,7 @@ def main():
 
     logger.info("🚀 Bot avviato — in ascolto...")
     app.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
+
 
 
 if __name__ == "__main__":
