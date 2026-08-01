@@ -1,0 +1,17 @@
+# Variabili d'ambiente — MAI caricare su GitHub!
+.env
+
+# Database locale
+*.db
+*.sqlite
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.Python
+venv/
+.venv/
+
+# macOS
+.DS_Store
