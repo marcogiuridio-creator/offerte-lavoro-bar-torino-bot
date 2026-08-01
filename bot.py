@@ -214,8 +214,18 @@ async def on_group_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         emoji = get_category_emoji(category)
         logger.info(f"{emoji} {format_category_label(category)} da {user.first_name}: {text[:60]}...")
 
-        # Aggiunge tag categoria come risposta automatica (opzionale, commentabile)
-        # await msg.reply_text(f"{emoji} *{format_category_label(category)}*", parse_mode=ParseMode.MARKDOWN)
+        # ── FASE 2: Matching Automatico & Notifiche Smart ──
+        if category == "OFFERTA":
+            import asyncio
+            import matcher
+            asyncio.create_task(matcher.notify_matched_candidates(
+                context.bot,
+                text,
+                user.username or "",
+                msg.message_id
+            ))
+            logger.info("🎯 Task notifiche smart avviato per nuova offerta di lavoro!")
+
 
 
 # ─── Comandi Admin ─────────────────────────────────────────────────────────────
@@ -399,6 +409,41 @@ async def cmd_evidenza(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(msg, parse_mode=ParseMode.MARKDOWN)
 
 
+async def cmd_match(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Comando /match [testo] — analizza il testo e mostra i candidati in target."""
+    if not is_admin(update.effective_user.id):
+        return
+
+    text = " ".join(context.args) if context.args else get_text(update.message)
+    if not text:
+        await update.message.reply_text("Uso: `/match Cerco barista con esperienza in centro`", parse_mode=ParseMode.MARKDOWN)
+        return
+
+    import matcher
+    details = matcher.extract_job_details(text)
+    candidates = matcher.get_matching_candidates(text, min_score=40)
+
+    roles = ", ".join(details["roles"]) if details["roles"] else "Tutti"
+    zones = ", ".join(details["zones"]) if details["zones"] else "Tutta Torino"
+
+    cand_list = ""
+    for c in candidates[:10]:
+        cand_list += f"• @{c['username'] or c['first_name']} (Match: *{c['match_score']}%*)\n"
+
+    if not cand_list:
+        cand_list = "Nessun candidato trovato col punteggio minimo."
+
+    msg = (
+        f"🎯 *ANALISI MATCHING*\n\n"
+        f"💼 *Ruoli identificati:* {roles}\n"
+        f"📍 *Zone identificate:* {zones}\n\n"
+        f"👥 *Candidati in Target trovati ({len(candidates)} totali):*\n{cand_list}"
+    )
+
+    await update.message.reply_text(msg, parse_mode=ParseMode.MARKDOWN)
+
+
+
 async def on_link_approval(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Gestisce approvazione/rifiuto link da parte dell'admin (bottoni inline)."""
     query = update.callback_query
@@ -570,6 +615,8 @@ def main():
     app.add_handler(CommandHandler("evidenza", cmd_evidenza))
     app.add_handler(CommandHandler("registrati", cmd_registrati))
     app.add_handler(CommandHandler("profilo", cmd_profilo))
+    app.add_handler(CommandHandler("match", cmd_match))
+
 
     # Data da WebApp Telegram
     app.add_handler(MessageHandler(filters.StatusUpdate.WEB_APP_DATA, on_webapp_data))
