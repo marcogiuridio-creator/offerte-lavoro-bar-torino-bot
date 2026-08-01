@@ -14,33 +14,51 @@ MAX_POSTS_PER_DAY = int(os.getenv("MAX_POSTS_PER_DAY", "2")) # max post per uten
 
 # ─── Messaggi del bot ──────────────────────────────────────────────────────────
 WELCOME_MESSAGE = """
-👋 Benvenuto/a in *Offerte Lavoro Bar Torino*!
+👋 Benvenuto/a nel gruppo *Offerte Lavoro Bar Torino*! ☕🍹
 
-Siamo una community di +9.000 professionisti del settore bar & ristorazione a Torino.
+Siamo la più grande community Horeca di Torino con oltre **9.000 professionisti** (baristi, bartender, camerieri, chef, aiuto cuochi e titolari di locali).
 
-📋 *Regole del gruppo:*
+━━━━━━━━━━━━━━━━━━━━━━━
 
-1️⃣ Pubblica solo annunci di lavoro nel settore bar/ristorazione
-2️⃣ Max *2 annunci al giorno* per utente
-3️⃣ No link esterni, no spam, no pubblicità
-4️⃣ Indica sempre zona e tipo di contratto
-5️⃣ Rispetta gli altri membri
+📌 *REGOLE FONDAMENTALI DEL GRUPPO:*
 
-📝 *Formato consigliato per gli annunci:*
+1️⃣ **Solo annunci HORECA**: Pubblica esclusivamente offerte o ricerche di lavoro per bar, ristoranti, pizzerie, catering e locali a Torino e provincia.
+2️⃣ **Limite messaggi**: Massimo *2 annunci al giorno* per utente (intervallo minimo di 6 ore tra i post).
+3️⃣ **Moderazione Link**: I link a siti esterni sono bloccati per sicurezza e richiedono l'approvazione dell'amministratore.
+4️⃣ **Annunci chiari**: Scrivi testi dettagliati di almeno 5 caratteri spiegando ruolo, zona e contatti.
+5️⃣ **Rispetto ed Educazione**: Vietati insulti, spam, catene, vendita prodotti o offerte di guadagno online.
 
-```
+━━━━━━━━━━━━━━━━━━━━━━━
+
+🤖 *COMANDI UTILI DEL BOT:*
+
+Puoi usare questi comandi sia nel gruppo che in privato col bot:
+
+• `/start` ── Avvia il bot e mostra questo benvenuto
+• `/regole` ── Leggi le regole ufficiali della community
+• `/stats` ── Guarda le statistiche aggiornate del gruppo
+• `/evidenza` ── Scopri come mettere in evidenza il tuo annuncio (solo 5€)
+
+━━━━━━━━━━━━━━━━━━━━━━━
+
+📝 *FORMATO CONSIGLIATO PER GLI ANNUNCI:*
+
 🏷️ OFFERTA / RICERCA
-💼 Ruolo: (es. Barista, Cameriere, Aiuto cuoco)
+💼 Ruolo: (es. Barista / Cameriere / Cuoco)
 📍 Zona: (quartiere/zona di Torino)
-⏰ Contratto: (Full-time / Part-time / Extra / Stagionale)
-📞 Contatto: @username o numero
-📝 Note: breve descrizione
-```
+⏰ Turni: (Full-time / Part-time / Extra / Notturno)
+💰 Paga/Contratto: (es. Contratto CCNL / Paga oraria)
+📞 Contatto: @username o numero di telefono
+📝 Dettagli: (breve descrizione del lavoro o esperienza)
 
-✨ Vuoi mettere il tuo annuncio *in evidenza*? Contatta @{admin_username}
+━━━━━━━━━━━━━━━━━━━━━━━
 
-In bocca al lupo! 🍀
+💎 *ANNUNCI IN EVIDENZA & SPONSOR:*
+Se hai urgenza di trovare personale e vuoi il tuo annuncio **in evidenza a 5€** o **fissato in cima al gruppo per 7 giorni**, contatta in privato: @{admin_username}
+
+Buon lavoro e buona ricerca a tutti! 🍀
 """.strip()
+
 
 RATE_LIMIT_MESSAGE = """
 ⏳ Hai già pubblicato un annuncio di recente.
