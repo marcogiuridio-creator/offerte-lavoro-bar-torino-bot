@@ -775,12 +775,19 @@ async def successful_payment_callback(update: Update, context: ContextTypes.DEFA
         # Pulisci pending_job
         context.user_data.pop("pending_job", None)
 
+        dash_kb = InlineKeyboardMarkup([
+            [InlineKeyboardButton("📊 Apri Dashboard Candidati (Mini-App)", web_app=WebAppInfo(url=f"{config.WEBAPP_DASHBOARD_URL}?job_id={job_id}"))]
+        ])
+
         await update.message.reply_text(
             "🎉 *PAGAMENTO RICEVUTO CON SUCCESSO!*\n\n"
             "Il tuo annuncio in evidenza è stato pubblicato, **fissato in cima al gruppo** e notificato in privato ai candidati Premium!\n\n"
-            "📋 *Ti abbiamo inviato qui sopra il Rapporto Completo dei Candidati compatibili a Torino (sia Premium che Free) con i loro contatti diretti!*",
+            "📋 *Ti abbiamo inviato qui sopra il Rapporto Completo dei Candidati compatibili a Torino.*\n"
+            "Puoi anche aprire la tua **Dashboard Candidati riservata nella Mini-App** col pulsante qui sotto:",
+            reply_markup=dash_kb,
             parse_mode=ParseMode.MARKDOWN
         )
+
 
     # SE È UN ABBONAMENTO CANDIDATO PREMIUM (100 STELLE / 2,19€)
     else:
