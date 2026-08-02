@@ -211,16 +211,31 @@ async def notify_matched_candidates(bot, job_text: str, employer_username: str, 
     for cand in matches[:30]: # Limita ai primi 30 candidati più affini
         user_id = cand["user_id"]
         score = cand["match_score"]
+        is_premium = db.is_user_premium(user_id)
 
-        # Formatta il messaggio di notifica
-        preview_text = job_text[:300] + ("..." if len(job_text) > 300 else "")
+        if is_premium:
+            # Utente Premium: notifica completa con contatti diretti
+            preview_text = job_text[:400] + ("..." if len(job_text) > 400 else "")
+            msg = (
+                f"⭐ *NUOVA OFFERTA IN TARGET (PREMIUM)* (Affinità: *{score}%*)\n\n"
+                f"📝 *Annuncio:* \n_{preview_text}_\n\n"
+                f"👤 *Pubblicato da:* {contact_ref}\n"
+                f"💡 *Per candidarti:* scrivi subito in privato a {contact_ref} per riservarti il colloquio!"
+            )
+        else:
+            # Utente Free: notifica teaser senza contatti diretti (Upsell)
+            details = cand.get("extracted_details", {})
+            roles_str = ", ".join(details.get("roles", [])) or "Settore Horeca"
+            zones_str = ", ".join(details.get("zones", [])) or "Torino"
 
-        msg = (
-            f"🎯 *NUOVA OFFERTA IN TARGET PER TE!* (Affinità: *{score}%*)\n\n"
-            f"📝 *Annuncio:* \n_{preview_text}_\n\n"
-            f"👤 *Pubblicato da:* {contact_ref}\n"
-            f"💡 *Per candidarti:* scrivi direttamente a {contact_ref} o rispondi all'annuncio nel gruppo!"
-        )
+            msg = (
+                f"🎯 *OFFERTA IN TARGET RILEVATA!* (Affinità: *{score}%*)\n\n"
+                f"💼 *Ruoli:* {roles_str}\n"
+                f"📍 *Zona:* {zones_str}\n\n"
+                f"🔒 *I contatti del titolare e il testo completo sono riservati agli Utenti Premium.*\n"
+                f"⚡ Diventa Premium a soli 2,99€ per sbloccare le notifiche istantanee con i contatti dei datori e candidarti per primo!\n\n"
+                f"👉 Scrivi /premium per attivare l'abbonamento!"
+            )
 
         try:
             await bot.send_message(
@@ -234,3 +249,4 @@ async def notify_matched_candidates(bot, job_text: str, employer_username: str, 
             logger.warning(f"Impossibile notificare utente {user_id}: {e}")
 
     return notified_count
+

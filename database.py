@@ -64,11 +64,18 @@ def init_db():
             phone           TEXT,
             bio             TEXT,
             is_premium      INTEGER DEFAULT 0,
+            premium_until   TEXT,
             created_at      TEXT DEFAULT (datetime('now')),
             updated_at      TEXT DEFAULT (datetime('now')),
             FOREIGN KEY (user_id) REFERENCES users(user_id)
         );
         """)
+
+        # Migration colonna premium_until
+        try:
+            conn.execute("ALTER TABLE candidate_profiles ADD COLUMN premium_until TEXT")
+        except Exception:
+            pass
 
 
 
@@ -247,7 +254,7 @@ def set_featured(message_id: int, hours: int = 24):
         """, (until, message_id))
 
 
-# ─── Candidate Profiles ────────────────────────────────────────────────────────
+# ─── Candidate Profiles & Premium ──────────────────────────────────────────────
 
 def save_candidate_profile(
     user_id: int,
@@ -288,11 +295,61 @@ def get_candidate_profile(user_id: int):
         return conn.execute("SELECT * FROM candidate_profiles WHERE user_id = ?", (user_id,)).fetchone()
 
 
-def get_all_candidates(limit: int = 50):
+def get_all_candidates(limit: int = 200):
     """Recupera la lista dei candidati salvati."""
     with get_conn() as conn:
         return conn.execute("""
             SELECT * FROM candidate_profiles
-            ORDER BY updated_at DESC
+            ORDER BY is_premium DESC, updated_at DESC
             LIMIT ?
         """, (limit,)).fetchall()
+
+
+def make_user_premium(user_id: int, days: int = 30):
+    """Attiva o prolunga lo stato Premium per un utente."""
+    now = datetime.now()
+    profile = get_candidate_profile(user_id)
+
+    current_until = None
+    if profile and profile["premium_until"]:
+        try:
+            current_until = datetime.fromisoformat(profile["premium_until"])
+        except Exception:
+            pass
+
+    if current_until and current_until > now:
+        new_until = current_until + timedelta(days=days)
+    else:
+        new_until = now + timedelta(days=days)
+
+    new_until_str = new_until.isoformat()
+
+    with get_conn() as conn:
+        conn.execute("""
+            UPDATE candidate_profiles
+            SET is_premium = 1, premium_until = ?
+            WHERE user_id = ?
+        """, (new_until_str, user_id))
+
+    return new_until.strftime("%d/%m/%Y")
+
+
+def is_user_premium(user_id: int) -> bool:
+    """Verifica se l'utente ha un abbonamento Premium attivo."""
+    profile = get_candidate_profile(user_id)
+    if not profile or not profile["is_premium"]:
+        return False
+
+    if profile["premium_until"]:
+        try:
+            until = datetime.fromisoformat(profile["premium_until"])
+            if until < datetime.now():
+                # Scaduto
+                with get_conn() as conn:
+                    conn.execute("UPDATE candidate_profiles SET is_premium = 0 WHERE user_id = ?", (user_id,))
+                return False
+        except Exception:
+            pass
+
+    return True
+

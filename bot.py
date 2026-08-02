@@ -307,6 +307,10 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif arg == "formato":
             await cmd_formato(update, context)
             return
+        elif arg == "premium":
+            await cmd_premium(update, context)
+            return
+
 
     welcome = config.WELCOME_MESSAGE.format(admin_username=config.ADMIN_USERNAME)
     keyboard = ReplyKeyboardMarkup(
@@ -581,10 +585,73 @@ async def cmd_registrati(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await send_smart_reply(update, context, msg, reply_markup=reply_keyboard, deep_link_arg="registrati")
 
 
+async def cmd_premium(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Comando /premium — info ed attivazione abbonamento Premium."""
+    user = update.effective_user
+    is_prem = db.is_user_premium(user.id)
+    profile = db.get_candidate_profile(user.id)
+
+    status_str = "⭐ *ATTIVO (Candidato Verificato)*" if is_prem else "⚪ *BASE (Gratuito)*"
+
+    until_str = ""
+    if is_prem and profile and profile.get("premium_until"):
+        try:
+            until_dt = datetime.fromisoformat(profile["premium_until"])
+            until_str = f"\n📅 *Scadenza:* {until_dt.strftime('%d/%m/%Y')}"
+        except Exception:
+            pass
+
+    msg = (
+        f"💎 *SERVIZIO CANDIDATO PREMIUM*\n\n"
+        f"Stato attuale: {status_str}{until_str}\n\n"
+        f"🏆 *VANTAGGI ESCLUSIVI PREMIUM:*\n"
+        f"⚡ *Notifiche Push Istantanee*: Ricevi in privato gli avvisi con il **contatto diretto del titolare** (@username / telefono) appena viene pubblicato un annuncio in target!\n"
+        f"⭐ *Posizionamento in Cima*: Il tuo profilo compare in **prima posizione** quando i bar cercano personale a Torino.\n"
+        f"📄 *Invio CV in PDF*: Sblocca il caricamento del tuo CV in formato PDF.\n"
+        f"🏷️ *Badge Verificato*: Distintivo di massima serietà.\n\n"
+        f"💰 *Costo:* soli *2,99€ / mese*\n\n"
+        f"📲 *COME ATTIVARE:* Scrivi agli admin @marcogiuridio o @banu per attivare la prova o l'abbonamento mensile!"
+    )
+
+    await send_smart_reply(update, context, msg, deep_link_arg="premium")
+
+
+async def cmd_grant_premium(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Comando Admin: /grant_premium USER_ID [GIORNI] — assegna Premium manualmente."""
+    if not is_admin(update.effective_user.id):
+        return
+
+    if not context.args:
+        await update.message.reply_text("Uso: `/grant_premium USER_ID [GIORNI]`\nEs: `/grant_premium 21773014 30`", parse_mode=ParseMode.MARKDOWN)
+        return
+
+    try:
+        target_user_id = int(context.args[0])
+        days = int(context.args[1]) if len(context.args) > 1 else 30
+        new_date = db.make_user_premium(target_user_id, days=days)
+
+        await update.message.reply_text(f"✅ Stato Premium attivato per user_id `{target_user_id}` fino al *{new_date}*!", parse_mode=ParseMode.MARKDOWN)
+
+        # Notifica l'utente in privato
+        try:
+            await context.bot.send_message(
+                chat_id=target_user_id,
+                text=f"🎉 *CONGRATULAZIONI!* Il tuo account è stato aggiornato a *CANDIDATO PREMIUM* fino al *{new_date}*!\n\nDa ora riceverai tutte le notifiche di lavoro in target in tempo reale con i contatti diretti dei datori!",
+                parse_mode=ParseMode.MARKDOWN
+            )
+        except Exception:
+            pass
+    except Exception as e:
+        await update.message.reply_text(f"❌ Errore: {e}")
+
+
 async def cmd_profilo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Comando /profilo — mostra il profilo candidato salvato."""
     user = update.effective_user
     profile = db.get_candidate_profile(user.id)
+    is_prem = db.is_user_premium(user.id)
+
+    status_badge = "⭐ *CANDIDATO PREMIUM*" if is_prem else "⚪ *UTENTE BASE (Gratuito)*"
 
     if not profile:
         keyboard = ReplyKeyboardMarkup(
@@ -592,8 +659,9 @@ async def cmd_profilo(update: Update, context: ContextTypes.DEFAULT_TYPE):
             resize_keyboard=True
         )
         msg_empty = (
-            "❌ Non hai ancora registrato il tuo profilo candidato!\n\n"
-            "Clicca sul pulsante qui sotto per crearlo in 1 minuto:"
+            f"❌ Non hai ancora registrato il tuo profilo candidato!\n\n"
+            f"Stato attuale: {status_badge}\n"
+            f"Clicca sul pulsante qui sotto per crearlo in 1 minuto:"
         )
         await send_smart_reply(update, context, msg_empty, reply_markup=keyboard, deep_link_arg="registrati")
         return
@@ -604,7 +672,8 @@ async def cmd_profilo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     avail = ", ".join(json.loads(profile["availability"])) if profile["availability"] else "Non specificata"
 
     msg = (
-        f"👤 *IL TUO PROFILO CANDIDATO HORECA*\n\n"
+        f"👤 *IL TUO PROFILO CANDIDATO HORECA*\n"
+        f"Stato: {status_badge}\n\n"
         f"💼 *Ruoli:* {roles}\n"
         f"⚡ *Skill:* {skills}\n"
         f"⏳ *Esperienza:* {profile['experience'] or 'N/D'}\n"
@@ -612,7 +681,7 @@ async def cmd_profilo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"📍 *Zone preferite:* {zones}\n"
         f"📱 *Telefono:* {profile['phone'] or 'Non fornito'}\n"
         f"📝 *Note:* {profile['bio'] or 'Nessuna'}\n\n"
-        f"🔄 Per aggiornare i dati, usa `/registrati` o clicca sul pulsante in basso."
+        f"🔄 Per aggiornare i dati, usa `/registrati`. Per il Premium: `/premium`"
     )
 
     keyboard = ReplyKeyboardMarkup(
@@ -621,6 +690,7 @@ async def cmd_profilo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
     await send_smart_reply(update, context, msg, reply_markup=keyboard, deep_link_arg="registrati")
+
 
 
 
@@ -695,7 +765,11 @@ def main():
     app.add_handler(CommandHandler("evidenza", cmd_evidenza))
     app.add_handler(CommandHandler("registrati", cmd_registrati))
     app.add_handler(CommandHandler("profilo", cmd_profilo))
+    app.add_handler(CommandHandler("premium", cmd_premium))
+    app.add_handler(CommandHandler("grant_premium", cmd_grant_premium))
     app.add_handler(CommandHandler("match", cmd_match))
+
+
 
 
     # Data da WebApp Telegram
