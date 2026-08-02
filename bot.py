@@ -1571,6 +1571,44 @@ async def cmd_edit_offerta(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"❌ Errore: {e}")
 
 
+async def cmd_offerte(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Comando Admin: /offerte — mostra l'elenco di tutte le ultime offerte pubblicate nel DB con pulsante modifica."""
+    if not is_admin(update.effective_user.id):
+        return
+
+    all_jobs = db.get_all_job_offers(limit=20)
+    if not all_jobs:
+        await update.message.reply_text("📋 Nessuna offerta di lavoro trovata nel database.")
+        return
+
+    await update.message.reply_text(f"📋 *PANNELLO ADMIN — ULTIME {len(all_jobs)} OFFERTE PUBBLICATE:*", parse_mode=ParseMode.MARKDOWN)
+
+    for job in all_jobs:
+        job_id = job["job_id"]
+        business = job["business_name"]
+        role = job["role"]
+        pkg = job["package"]
+        created = job["created_at"]
+        uname = f"@{job['username']}" if job["username"] else f"ID {job['user_id']}"
+
+        edit_url = f"{config.WEBAPP_PUBBLICA_URL}&edit_job_id={job_id}" if "?" in config.WEBAPP_PUBBLICA_URL else f"{config.WEBAPP_PUBBLICA_URL}?edit_job_id={job_id}"
+
+        kb = InlineKeyboardMarkup([
+            [InlineKeyboardButton("✏️ Modifica Annuncio come Admin", web_app=WebAppInfo(url=edit_url))],
+            [InlineKeyboardButton("📊 Dashboard Candidati", web_app=WebAppInfo(url=f"{config.WEBAPP_DASHBOARD_URL}&job_id={job_id}" if "?" in config.WEBAPP_DASHBOARD_URL else f"{config.WEBAPP_DASHBOARD_URL}?job_id={job_id}"))]
+        ])
+
+        msg = (
+            f"🆔 *JOB ID: `#{job_id}`*\n"
+            f"🏪 *Locale:* {business}\n"
+            f"💼 *Ruolo:* {role} | Pacchetto: *{pkg.upper()}*\n"
+            f"👤 *Datore:* {uname}\n"
+            f"📅 *Data:* {created}"
+        )
+        await update.message.reply_text(msg, reply_markup=kb, parse_mode=ParseMode.MARKDOWN)
+
+
+
 
 
 
@@ -1631,6 +1669,7 @@ def main():
     app.add_handler(CommandHandler("broadcast_titolari", cmd_broadcast_titolari))
     app.add_handler(CommandHandler("mie_offerte", cmd_mie_offerte))
     app.add_handler(CommandHandler("edit_offerta", cmd_edit_offerta))
+    app.add_handler(CommandHandler("offerte", cmd_offerte))
 
 
     # Data da WebApp Telegram
