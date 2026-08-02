@@ -1228,11 +1228,10 @@ async def on_webapp_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def cmd_test_offerta(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Comando di test riservato agli Admin: simula la pubblicazione di un annuncio senza inviare nulla al gruppo pubblico."""
+    """Comando di test: simula la pubblicazione di un annuncio senza inviare nulla al gruppo pubblico."""
     user = update.effective_user
-    if user.username not in ("marcogiuridio", "banu80"):
-        await update.message.reply_text("⛔ Comando riservato agli Amministratori.")
-        return
+    username_clean = (user.username or "").lower().replace("@", "").strip()
+
 
     job_id = db.create_job_offer(
         user_id=user.id,
