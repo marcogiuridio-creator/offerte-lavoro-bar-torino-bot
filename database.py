@@ -178,6 +178,16 @@ def verify_user(user_id: int):
         conn.execute("UPDATE users SET is_verified = 1 WHERE user_id = ?", (user_id,))
 
 
+def get_banned_users():
+    """Recupera la lista di tutti gli utenti bannati."""
+    with get_conn() as conn:
+        return conn.execute("""
+            SELECT user_id, username, first_name, last_name, joined_at, last_post
+            FROM users WHERE is_banned = 1
+            ORDER BY last_post DESC
+        """).fetchall()
+
+
 def tag_user_role(user_id: int, role: str):
     """Tagga un utente come 'datore' o 'lavoratore'."""
     with get_conn() as conn:

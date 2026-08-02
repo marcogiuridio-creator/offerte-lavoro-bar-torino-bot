@@ -432,6 +432,35 @@ async def cmd_unban(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(f"✅ {target.first_name} è stato sbannato.")
 
 
+async def cmd_bannati(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Comando Admin: /bannati — mostra la lista di tutti gli utenti bannati dal bot."""
+    if not is_admin(update.effective_user.id):
+        return
+
+    banned_list = db.get_banned_users()
+
+    if not banned_list:
+        await update.message.reply_text(
+            "✅ *Nessun utente bannato dal bot al momento.*\n\n"
+            "💡 _Nota: questa lista include solo i ban eseguiti dal bot con /ban. "
+            "I ban fatti manualmente dall'interfaccia Telegram non vengono tracciati qui._",
+            parse_mode=ParseMode.MARKDOWN
+        )
+        return
+
+    lines = [f"🚫 *LISTA UTENTI BANNATI DAL BOT* ({len(banned_list)} totali)\n"]
+    for idx, b in enumerate(banned_list, 1):
+        fname = b["first_name"] or ""
+        lname = b["last_name"] or ""
+        name = (fname + " " + lname).strip() or "Utente"
+        uname = f" (@{b['username']})" if b["username"] else ""
+        uid = b["user_id"]
+        lines.append(f"{idx}. *{name}*{uname}\n    `ID: {uid}`")
+
+    lines.append(f"\n💡 _Per sbannare: rispondi al messaggio dell'utente con /unban_")
+    await update.message.reply_text("\n".join(lines), parse_mode=ParseMode.MARKDOWN)
+
+
 async def cmd_verify(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Comando /verify — segna utente come verificato."""
     if not is_admin(update.message.from_user.id):
@@ -1433,6 +1462,7 @@ def main():
     app.add_handler(CommandHandler("stats", cmd_stats))
     app.add_handler(CommandHandler("ban", cmd_ban))
     app.add_handler(CommandHandler("unban", cmd_unban))
+    app.add_handler(CommandHandler("bannati", cmd_bannati))
     app.add_handler(CommandHandler("verify", cmd_verify))
     app.add_handler(CommandHandler("featured", cmd_featured))
     app.add_handler(CommandHandler("regole", cmd_regole))
