@@ -143,6 +143,27 @@ def init_db():
                     """, (u["user_id"], u.get("name", "Utente"), u.get("role", ""), u.get("count", 0)))
                 print(f"🌱 Auto-seed completato: {len(seed_data)} utenti importati da seed_users.json")
 
+        # Auto-seed: importa offerte da seed_jobs.json se la tabella job_offers è vuota
+        jobs_count = conn.execute("SELECT COUNT(*) FROM job_offers").fetchone()[0]
+        if jobs_count == 0:
+            import json
+            import os
+            seed_jobs_path = os.path.join(os.path.dirname(__file__), "seed_jobs.json")
+            if os.path.exists(seed_jobs_path):
+                with open(seed_jobs_path, "r", encoding="utf-8") as f:
+                    seed_jobs_data = json.load(f)
+                for j in seed_jobs_data:
+                    conn.execute("""
+                        INSERT OR IGNORE INTO job_offers (
+                            job_id, user_id, username, business_name, role, zone, shift, salary, description, contact, package, is_verified
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """, (
+                        j["job_id"], j["user_id"], j.get("username", ""), j["business_name"], j["role"],
+                        j["zone"], j["shift"], j["salary"], j["description"], j["contact"], j["package"], j.get("is_verified", 1)
+                    ))
+                print(f"🌱 Auto-seed offerte completato: {len(seed_jobs_data)} offerte importate da seed_jobs.json")
+
+
 
 # ─── Users ────────────────────────────────────────────────────────────────────
 
