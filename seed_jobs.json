@@ -13,35 +13,5 @@
     "package": "vip",
     "is_verified": 1,
     "message_id": 36159
-  },
-  {
-    "job_id": 2,
-    "user_id": 356464630,
-    "username": "",
-    "business_name": "AL VEJ BICERIN",
-    "role": "Barista",
-    "zone": "Centro",
-    "shift": "Turni Vari",
-    "salary": "Da definire",
-    "description": "Si ricerca barista esperto con disponibilità dal lunedì al sabato per bar caffetteria Al Vej Bicerin in centro a Torino.",
-    "contact": "Contatto in privato Telegram",
-    "package": "evidenza",
-    "is_verified": 1,
-    "message_id": null
-  },
-  {
-    "job_id": 3,
-    "user_id": 415606576,
-    "username": "",
-    "business_name": "AL VEJ BICERIN",
-    "role": "Barista",
-    "zone": "Centro",
-    "shift": "Turni Vari",
-    "salary": "Da definire",
-    "description": "Si ricerca barista esperto con disponibilità dal lunedì al sabato per bar caffetteria Al Vej Bicerin in centro a Torino.",
-    "contact": "Contatto in privato Telegram",
-    "package": "evidenza",
-    "is_verified": 1,
-    "message_id": null
   }
 ]
