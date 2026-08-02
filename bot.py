@@ -604,10 +604,11 @@ async def cmd_premium(update: Update, context: ContextTypes.DEFAULT_TYPE):
             pass
 
     keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("🌟 Paga 29 Telegram Stars (~2,99€)", callback_data="pay_stars")],
+        [InlineKeyboardButton("🌟 Paga 100 Telegram Stars (2,99€)", callback_data="pay_stars")],
         [InlineKeyboardButton("💳 Paga 2,99€ con Carta / Stripe", callback_data="pay_stripe")],
         [InlineKeyboardButton("💬 Paga con Satispay / PayPal (Admin)", url="https://t.me/marcogiuridio")]
     ])
+
 
     msg = (
         f"💎 *SERVIZIO CANDIDATO PREMIUM*\n\n"
@@ -636,7 +637,8 @@ async def on_payment_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         description = "Notifiche push istantanee con contatti diretti dei datori a Torino!"
         payload = "premium_subscription_stars"
         currency = "XTR"
-        prices = [LabeledPrice("Abbonamento Premium 30 giorni", 29)]
+        prices = [LabeledPrice("Abbonamento Premium 30 giorni", 100)]
+
 
         try:
             await context.bot.send_invoice(
