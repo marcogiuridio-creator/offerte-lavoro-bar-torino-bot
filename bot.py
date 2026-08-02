@@ -1551,13 +1551,9 @@ async def cmd_broadcast_titolari(update: Update, context: ContextTypes.DEFAULT_T
 
 
 async def cmd_mie_offerte(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Mostra le offerte pubblicate dal datore o tutte le offerte se admin."""
+    """Mostra le offerte pubblicate dallo specifico datore di lavoro."""
     user = update.effective_user
     offers = db.get_user_job_offers(user.id, user.username or "")
-
-    # Se l'utente è un admin e non ha offerte proprie, mostra comunque le offerte del database
-    if not offers and is_admin(user):
-        offers = db.get_all_job_offers(limit=20)
 
     if not offers:
         await update.message.reply_text(

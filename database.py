@@ -567,14 +567,22 @@ def update_job_offer_message_id(job_id: int, message_id: int):
 
 
 def get_user_job_offers(user_id: int, username: str = ""):
-    """Recupera tutte le offerte pubblicate da uno specifico titolare (sia per user_id che per username)."""
+    """Recupera tutte le offerte pubblicate da uno specifico titolare."""
     with get_conn() as conn:
         clean_user = username.lower().replace("@", "").strip() if username else ""
-        return conn.execute("""
-            SELECT * FROM job_offers
-            WHERE user_id = ? OR (username != '' AND LOWER(username) = ?)
-            ORDER BY created_at DESC
-        """, (user_id, clean_user)).fetchall()
+        if clean_user:
+            return conn.execute("""
+                SELECT * FROM job_offers
+                WHERE user_id = ? OR (username IS NOT NULL AND username != '' AND LOWER(username) = ?)
+                ORDER BY created_at DESC
+            """, (user_id, clean_user)).fetchall()
+        else:
+            return conn.execute("""
+                SELECT * FROM job_offers
+                WHERE user_id = ?
+                ORDER BY created_at DESC
+            """, (user_id,)).fetchall()
+
 
 
 
