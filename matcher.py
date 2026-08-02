@@ -240,3 +240,71 @@ async def notify_matched_candidates(bot, job_text: str, employer_username: str, 
     return notified_count
 
 
+async def send_employer_candidates_report(bot, employer_user_id: int, job_text: str):
+    """
+    Genera ed invia al datore di lavoro a pagamento la lista dei candidati compatibili (Premium + Free).
+    Gli utenti Premium appaiono in CIMA alla lista.
+    """
+    matches = get_matching_candidates(job_text, min_score=40)
+    if not matches:
+        try:
+            await bot.send_message(
+                chat_id=employer_user_id,
+                text="ℹ️ *RAPPORTO CANDIDATI:* Nessun candidato registrato attualmente in target per questa posizione.",
+                parse_mode="Markdown"
+            )
+        except Exception:
+            pass
+        return
+
+    # Separa Premium e Free
+    premium_cands = []
+    free_cands = []
+
+    for c in matches:
+        if db.is_user_premium(c["user_id"]):
+            premium_cands.append(c)
+        else:
+            free_cands.append(c)
+
+    # Ordina ciascun gruppo per match_score
+    premium_cands.sort(key=lambda x: x["match_score"], reverse=True)
+    free_cands.sort(key=lambda x: x["match_score"], reverse=True)
+
+    report_lines = [
+        "📊 *RAPPORTO CANDIDATI COMPATIBILI TORINO*\n",
+        f"Trovati *{len(matches)} candidati* con profilo compatibile con la tua offerta.\n"
+    ]
+
+    if premium_cands:
+        report_lines.append("⭐ *CANDIDATI VERIFICATI PREMIUM (IN CIMA):*")
+        for idx, c in enumerate(premium_cands[:15], 1):
+            username_str = f"@{c['username']}" if c['username'] else f"ID: `{c['user_id']}`"
+            phone_str = f" | 📱 {c['phone']}" if c.get('phone') else ""
+            exp_str = f" ({c['experience']})" if c.get('experience') else ""
+            report_lines.append(f"{idx}. {c['first_name']} ({username_str}){exp_str}{phone_str} — Match: *{c['match_score']}%*")
+        report_lines.append("")
+
+    if free_cands:
+        report_lines.append("⚪ *CANDIDATI BASE REGISTRATI:*")
+        for idx, c in enumerate(free_cands[:20], 1):
+            username_str = f"@{c['username']}" if c['username'] else f"ID: `{c['user_id']}`"
+            phone_str = f" | 📱 {c['phone']}" if c.get('phone') else ""
+            exp_str = f" ({c['experience']})" if c.get('experience') else ""
+            report_lines.append(f"{idx}. {c['first_name']} ({username_str}){exp_str}{phone_str} — Match: *{c['match_score']}%*")
+
+    report_lines.append("\n💡 *Puoi contattarli direttamente su Telegram o ai recapiti indicati!*")
+
+    full_report = "\n".join(report_lines)
+
+    try:
+        await bot.send_message(
+            chat_id=employer_user_id,
+            text=full_report,
+            parse_mode="Markdown"
+        )
+    except Exception as e:
+        logger.error(f"Impossibile inviare report candidati al datore {employer_user_id}: {e}")
+
+
+

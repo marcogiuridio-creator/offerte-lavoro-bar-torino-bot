@@ -748,7 +748,11 @@ async def successful_payment_callback(update: Update, context: ContextTypes.DEFA
                     logger.warning(f"Impossibile fissare post in cima: {pe}")
 
                 import matcher
+                # 1. Notifica PUSH ai candidati Premium
                 await matcher.notify_matched_candidates(context.bot, post_text, user.username or "", pub_msg.message_id)
+
+                # 2. Rapporto candidati (Premium in cima + Free) inviato in privato al datore di lavoro
+                await matcher.send_employer_candidates_report(context.bot, user.id, post_text)
             except Exception as e:
                 logger.error(f"Errore pubblicazione offerta a pagamento: {e}")
 
@@ -757,9 +761,11 @@ async def successful_payment_callback(update: Update, context: ContextTypes.DEFA
 
         await update.message.reply_text(
             "🎉 *PAGAMENTO RICEVUTO CON SUCCESSO!*\n\n"
-            "Il tuo annuncio in evidenza è stato pubblicato, **fissato in cima al gruppo** e notificato in privato a tutti i candidati qualificati a Torino!",
+            "Il tuo annuncio in evidenza è stato pubblicato, **fissato in cima al gruppo** e notificato in privato ai candidati Premium!\n\n"
+            "📋 *Ti abbiamo inviato qui sopra il Rapporto Completo dei Candidati compatibili a Torino (sia Premium che Free) con i loro contatti diretti!*",
             parse_mode=ParseMode.MARKDOWN
         )
+
 
     # SE È UN ABBONAMENTO CANDIDATO PREMIUM (100 STELLE / 2,19€)
     else:
@@ -956,16 +962,17 @@ async def on_webapp_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             text=post_text,
                             parse_mode=ParseMode.MARKDOWN
                         )
-                        import matcher
-                        await matcher.notify_matched_candidates(context.bot, post_text, user.username or "", pub_msg.message_id)
                     except Exception as e:
                         logger.error(f"Errore pubblicazione gruppo: {e}")
 
                 await update.effective_message.reply_text(
                     "✅ *ANNUNCIO GRATUITO PUBBLICATO!*\n\n"
-                    "Il tuo annuncio è stato inviato nel gruppo ed è stato elaborato dall'algoritmo di matching per notificare i candidati idonei a Torino!",
+                    "Il tuo annuncio è stato pubblicato nel gruppo.\n\n"
+                    "💡 *Vuoi ricevere la lista dei candidati in target con telefono/Telegram ed inviare notifiche push ai baristi?*\n"
+                    "Passa all'Annuncio in Evidenza (250 Stelle / 5,39€) con il comando `/pubblica`!",
                     parse_mode=ParseMode.MARKDOWN
                 )
+
 
             elif pkg in ["evidenza", "vip"]:
                 context.user_data["pending_job"] = job_details
