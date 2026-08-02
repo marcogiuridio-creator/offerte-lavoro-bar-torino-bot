@@ -121,6 +121,12 @@ def init_db():
         except Exception:
             pass
 
+        # Migration colonna message_id per collegare l'annuncio al messaggio Telegram nel gruppo
+        try:
+            conn.execute("ALTER TABLE job_offers ADD COLUMN message_id INTEGER DEFAULT NULL")
+        except Exception:
+            pass
+
         # Auto-seed: importa utenti da seed_users.json se la tabella users è vuota
         count = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
         if count == 0:
@@ -499,6 +505,50 @@ def get_job_offer(job_id: int):
     """Recupera un annuncio dal database."""
     with get_conn() as conn:
         return conn.execute("SELECT * FROM job_offers WHERE job_id = ?", (job_id,)).fetchone()
+
+
+def update_job_offer(
+    job_id: int,
+    business_name: str,
+    role: str,
+    zone: str,
+    shift: str,
+    salary: str,
+    description: str,
+    contact: str
+):
+    """Aggiorna i campi di un annuncio esistente."""
+    with get_conn() as conn:
+        conn.execute("""
+            UPDATE job_offers
+            SET business_name = ?,
+                role          = ?,
+                zone          = ?,
+                shift         = ?,
+                salary        = ?,
+                description   = ?,
+                contact       = ?
+            WHERE job_id = ?
+        """, (business_name, role, zone, shift, salary, description, contact, job_id))
+
+
+def update_job_offer_message_id(job_id: int, message_id: int):
+    """Associa il message_id Telegram del gruppo al job_id."""
+    with get_conn() as conn:
+        conn.execute("UPDATE job_offers SET message_id = ? WHERE job_id = ?", (message_id, job_id))
+
+
+def get_user_job_offers(user_id: int):
+    """Recupera tutte le offerte pubblicate da uno specifico titolare."""
+    with get_conn() as conn:
+        return conn.execute("SELECT * FROM job_offers WHERE user_id = ? ORDER BY created_at DESC", (user_id,)).fetchall()
+
+
+def get_all_job_offers(limit: int = 50):
+    """Recupera la lista di tutte le offerte (per pannello Admin)."""
+    with get_conn() as conn:
+        return conn.execute("SELECT * FROM job_offers ORDER BY created_at DESC LIMIT ?", (limit,)).fetchall()
+
 
 
 def save_application(

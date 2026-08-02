@@ -402,7 +402,8 @@
       const user = (tg && tg.initDataUnsafe && tg.initDataUnsafe.user) ? tg.initDataUnsafe.user : null;
 
       const payload = {
-        action: 'publish_job_offer',
+        action: editingJobId ? 'edit_job_offer' : 'publish_job_offer',
+        job_id: editingJobId ? parseInt(editingJobId) : null,
         user_id: user ? user.id : null,
         username: user ? (user.username || '') : '',
         package: selectedPackage,
@@ -414,6 +415,18 @@
         description: desc,
         contact: contact
       };
+
+      if (editingJobId) {
+        try {
+          await fetch('/api/update_job_offer', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+        } catch(e) {
+          console.error('Errore update API:', e);
+        }
+      }
 
       if (tg && tg.sendData) {
         try {
@@ -431,10 +444,43 @@
         if (tg && tg.close) {
           tg.close();
         } else {
-          alert('Offerta inoltrata al bot!');
+          alert('Modifiche salvate con successo!');
         }
       }, 500);
     }
+
+    let editingJobId = null;
+
+    async function loadExistingJobOffer() {
+      const urlParams = new URLSearchParams(window.location.search);
+      editingJobId = urlParams.get('edit_job_id') || urlParams.get('job_id');
+
+      if (!editingJobId) return;
+
+      try {
+        const resp = await fetch(`/api/get_job_offer?job_id=${editingJobId}`);
+        const data = await resp.json();
+
+        if (data.status === 'ok' && data.job) {
+          const j = data.job;
+          document.querySelector('.header h1').innerText = "✏️ Modifica Offerta Lavoro";
+          document.querySelector('.header p').innerText = "Aggiorna i dettagli del tuo annuncio in tempo reale";
+          document.getElementById('submitBtn').innerText = "💾 SALVA MODIFICHE ANNUNCIO";
+
+          document.getElementById('businessName').value = j.business_name || '';
+          if (j.role) document.getElementById('roleSelect').value = j.role;
+          if (j.zone) document.getElementById('zoneSelect').value = j.zone;
+          if (j.shift) document.getElementById('shiftSelect').value = j.shift;
+          if (j.salary) document.getElementById('salaryInput').value = j.salary;
+          if (j.description) document.getElementById('descriptionInput').value = j.description;
+          if (j.contact) document.getElementById('contactInput').value = j.contact;
+        }
+      } catch(e) {
+        console.error('Errore caricamento annuncio esistente:', e);
+      }
+    }
+
+    loadExistingJobOffer();
 
     document.getElementById('submitBtn').addEventListener('click', submitJob);
   </script>

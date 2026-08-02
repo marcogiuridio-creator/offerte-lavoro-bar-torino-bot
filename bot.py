@@ -793,6 +793,7 @@ async def successful_payment_callback(update: Update, context: ContextTypes.DEFA
                     parse_mode=ParseMode.MARKDOWN
                 )
                 msg_id = pub_msg.message_id
+                db.update_job_offer_message_id(job_id, msg_id)
                 # Fissa il post in cima al gruppo (Pin)
                 try:
                     await context.bot.pin_chat_message(
@@ -1227,6 +1228,20 @@ async def on_webapp_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
             }
 
             if pkg == "free":
+                job_id = db.create_job_offer(
+                    user_id=user.id,
+                    username=user.username or "",
+                    business_name=business,
+                    role=role,
+                    zone=zone,
+                    shift=shift,
+                    salary=salary,
+                    description=desc,
+                    contact=contact,
+                    package="free",
+                    is_verified=0
+                )
+
                 post_text = (
                     f"📢 *OFFERTA DI LAVORO — {business.upper()}*\n\n"
                     f"💼 *Ruolo Cercato:* {role}\n"
@@ -1244,16 +1259,17 @@ async def on_webapp_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             text=post_text,
                             parse_mode=ParseMode.MARKDOWN
                         )
+                        db.update_job_offer_message_id(job_id, pub_msg.message_id)
                     except Exception as e:
                         logger.error(f"Errore pubblicazione gruppo: {e}")
 
                 await update.effective_message.reply_text(
                     "✅ *ANNUNCIO GRATUITO PUBBLICATO!*\n\n"
-                    "Il tuo annuncio è stato pubblicato nel gruppo.\n\n"
-                    "💡 *Vuoi ricevere la lista dei candidati in target con telefono/Telegram ed inviare notifiche push ai baristi?*\n"
-                    "Passa all'Annuncio in Evidenza (250 Stelle / 5,39€) con il comando `/pubblica`!",
+                    f"Il tuo annuncio `#{job_id}` è stato pubblicato nel gruppo.\n\n"
+                    "💡 *Puoi modificarlo o rivederlo in qualsiasi momento digitando `/mie_offerte`!*",
                     parse_mode=ParseMode.MARKDOWN
                 )
+
 
 
             elif pkg in ["evidenza", "vip"]:
@@ -1426,6 +1442,75 @@ async def cmd_broadcast_titolari(update: Update, context: ContextTypes.DEFAULT_T
     )
 
 
+async def cmd_mie_offerte(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Mostra le offerte pubblicate dal datore con tasto di modifica in WebApp."""
+    user = update.effective_user
+    offers = db.get_user_job_offers(user.id)
+
+    if not offers:
+        await update.message.reply_text(
+            "📋 *Nessuna offerta registrata a tuo nome.*\n\n"
+            "Puoi pubblicare una nuova offerta di lavoro in 30 secondi con il comando `/pubblica`!",
+            parse_mode=ParseMode.MARKDOWN
+        )
+        return
+
+    await update.message.reply_text(f"📋 *LE TUE OFFERTE DI LAVORO REGISTRATE* ({len(offers)} totali):", parse_mode=ParseMode.MARKDOWN)
+
+    for job in offers:
+        job_id = job["job_id"]
+        business = job["business_name"]
+        role = job["role"]
+        pkg = job["package"]
+        created = job["created_at"]
+
+        kb = InlineKeyboardMarkup([
+            [InlineKeyboardButton("✏️ Modifica Annuncio (Mini-App)", web_app=WebAppInfo(url=f"{config.WEBAPP_PUBBLICA_URL}?edit_job_id={job_id}"))],
+            [InlineKeyboardButton("📊 Dashboard Candidati", web_app=WebAppInfo(url=f"{config.WEBAPP_DASHBOARD_URL}?job_id={job_id}"))]
+        ])
+
+        msg = (
+            f"🏪 *{business.upper()}*\n"
+            f"💼 Ruolo: *{role}* | Pacchetto: *{pkg.upper()}*\n"
+            f"📅 Data: {created}\n"
+            f"🆔 ID Annuncio: `#{job_id}`"
+        )
+        await update.message.reply_text(msg, reply_markup=kb, parse_mode=ParseMode.MARKDOWN)
+
+
+async def cmd_edit_offerta(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Comando Admin: /edit_offerta JOB_ID — permette all'admin di modificare qualsiasi annuncio."""
+    if not is_admin(update.effective_user.id):
+        return
+
+    if not context.args:
+        await update.message.reply_text("Uso Admin: `/edit_offerta JOB_ID`\nEs: `/edit_offerta 3`", parse_mode=ParseMode.MARKDOWN)
+        return
+
+    try:
+        job_id = int(context.args[0])
+        job = db.get_job_offer(job_id)
+        if not job:
+            await update.message.reply_text(f"❌ Annuncio #{job_id} non trovato nel database.")
+            return
+
+        kb = InlineKeyboardMarkup([
+            [InlineKeyboardButton("✏️ Modifica Annuncio come Admin", web_app=WebAppInfo(url=f"{config.WEBAPP_PUBBLICA_URL}?edit_job_id={job_id}"))]
+        ])
+
+        msg = (
+            f"🛠️ *PANNELLO MODIFICA ADMIN ANNUNCIO #{job_id}*\n\n"
+            f"🏪 *Locale:* {job['business_name']}\n"
+            f"💼 *Ruolo:* {job['role']}\n"
+            f"👤 *Datore:* @{job['username']} (`ID: {job['user_id']}`)\n\n"
+            f"Clicca sul pulsante qui sotto per modificare l'annuncio in tempo reale:"
+        )
+        await update.message.reply_text(msg, reply_markup=kb, parse_mode=ParseMode.MARKDOWN)
+    except Exception as e:
+        await update.message.reply_text(f"❌ Errore: {e}")
+
+
+
 
 async def post_init(application: Application):
     """Configura automaticamente il menu comandi nativo di Telegram con le relative icone."""
@@ -1482,6 +1567,8 @@ def main():
     app.add_handler(CommandHandler("titolari", cmd_titolari))
     app.add_handler(CommandHandler("lavoratori", cmd_lavoratori))
     app.add_handler(CommandHandler("broadcast_titolari", cmd_broadcast_titolari))
+    app.add_handler(CommandHandler("mie_offerte", cmd_mie_offerte))
+    app.add_handler(CommandHandler("edit_offerta", cmd_edit_offerta))
 
 
     # Data da WebApp Telegram

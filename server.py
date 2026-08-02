@@ -62,6 +62,44 @@ class WebAppHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
             except Exception as e:
                 logger.error(f"Errore GET profile API: {e}")
 
+        if self.path.startswith("/api/get_job_offer"):
+            try:
+                import urllib.parse
+                parsed = urllib.parse.urlparse(self.path)
+                params = urllib.parse.parse_qs(parsed.query)
+                job_id = int(params.get("job_id", [0])[0])
+
+                job = db.get_job_offer(job_id)
+                if job:
+                    res = {
+                        "status": "ok",
+                        "job": {
+                            "job_id": job["job_id"],
+                            "user_id": job["user_id"],
+                            "username": job["username"],
+                            "business_name": job["business_name"],
+                            "role": job["role"],
+                            "zone": job["zone"],
+                            "shift": job["shift"],
+                            "salary": job["salary"],
+                            "description": job["description"],
+                            "contact": job["contact"],
+                            "package": job["package"],
+                            "message_id": job["message_id"] if "message_id" in job.keys() else None
+                        }
+                    }
+                else:
+                    res = {"status": "not_found"}
+
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/json')
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.end_headers()
+                self.wfile.write(json.dumps(res).encode('utf-8'))
+                return
+            except Exception as e:
+                logger.error(f"Errore GET job_offer API: {e}")
+
         if self.path.startswith("/api/get_employer_candidates"):
 
 
@@ -188,8 +226,76 @@ class WebAppHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
             self.end_headers()
             return
 
+        elif self.path == "/api/update_job_offer":
+            content_length = int(self.headers.get('Content-Length', 0))
+            post_data = self.rfile.read(content_length)
+            try:
+                data = json.loads(post_data.decode('utf-8'))
+                job_id = data.get("job_id")
+                if job_id:
+                    job_id = int(job_id)
+                    db.update_job_offer(
+                        job_id=job_id,
+                        business_name=data.get("business_name", ""),
+                        role=data.get("role", ""),
+                        zone=data.get("zone", ""),
+                        shift=data.get("shift", ""),
+                        salary=data.get("salary", ""),
+                        description=data.get("description", ""),
+                        contact=data.get("contact", "")
+                    )
+                    logger.info(f"✅ Annuncio #{job_id} aggiornato via API")
+
+                    # Se presente un message_id nel gruppo, aggiorna anche il testo nel gruppo Telegram!
+                    job = db.get_job_offer(job_id)
+                    if job and job.get("message_id"):
+                        import config
+                        from telegram import Bot
+                        from telegram.constants import ParseMode
+                        if config.BOT_TOKEN and config.GROUP_ID != 0:
+                            import asyncio
+                            async def update_tg_msg():
+                                try:
+                                    bot = Bot(token=config.BOT_TOKEN)
+                                    pkg = job["package"]
+                                    header = "📢 *OFFERTA DI LAVORO*" if pkg == "free" else ("🔝 *OFFERTA IN EVIDENZA (SPONSOR 24H)* 🔝" if pkg == "evidenza" else "👑 *SPONSOR VIP (7 GIORNI IN CIMA)* 👑")
+                                    updated_text = (
+                                        f"{header}\n\n"
+                                        f"🏪 *LOCALE:* {job['business_name'].upper()}\n"
+                                        f"💼 *Ruolo Cercato:* {job['role']}\n"
+                                        f"📍 *Zona:* {job['zone']}\n"
+                                        f"⏰ *Turni:* {job['shift']}\n"
+                                        f"💰 *Paga:* {job['salary'] if job['salary'] else 'Trattabile'}\n\n"
+                                        f"📝 *Descrizione & Requisiti:*\n_{job['description']}_\n\n"
+                                        f"📞 *Contatto Candidature:* {job['contact']}\n"
+                                        f"✏️ _(Annuncio Aggiornato dal Datore)_"
+                                    )
+                                    await bot.edit_message_text(
+                                        chat_id=config.GROUP_ID,
+                                        message_id=job["message_id"],
+                                        text=updated_text,
+                                        parse_mode=ParseMode.MARKDOWN
+                                    )
+                                except Exception as e_tg:
+                                    logger.warning(f"Impossibile aggiornare messaggio Telegram per job #{job_id}: {e_tg}")
+
+                            asyncio.run(update_tg_msg())
+
+                    self.send_response(200)
+                    self.send_header('Content-Type', 'application/json')
+                    self.end_headers()
+                    self.wfile.write(json.dumps({"status": "ok"}).encode('utf-8'))
+                    return
+            except Exception as e:
+                logger.error(f"Errore update_job_offer API: {e}")
+
+            self.send_response(400)
+            self.end_headers()
+            return
+
         self.send_response(404)
         self.end_headers()
+
 
 
     def log_message(self, format, *args):
