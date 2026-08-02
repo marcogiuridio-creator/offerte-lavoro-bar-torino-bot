@@ -7,7 +7,8 @@ load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN", "")
 GROUP_ID = int(os.getenv("GROUP_ID", "0"))          # ID numerico del gruppo (negativo)
 ADMIN_IDS = [int(x) for x in os.getenv("ADMIN_IDS", "21773014").split(",") if x]
-ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "marcogiuridio o @banu")
+ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "marcogiuridio o @banu80")
+
 STRIPE_PROVIDER_TOKEN = os.getenv("STRIPE_PROVIDER_TOKEN", "")
 WEBAPP_URL = os.getenv("WEBAPP_URL", "https://raw.githack.com/marcogiuridio-creator/offerte-lavoro-bar-torino-bot/main/webapp/index.html?v=20260802_3")
 
@@ -104,7 +105,8 @@ Scrivi a @{admin_username} per prenotare!
 """.strip()
 
 # ─── Testo admin username ──────────────────────────────────────────────────────
-ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "marcogiuridio o @banu")
+ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "marcogiuridio o @banu80")
+
 
 
 # ─── Database ──────────────────────────────────────────────────────────────────

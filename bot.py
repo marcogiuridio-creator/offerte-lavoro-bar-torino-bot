@@ -657,13 +657,14 @@ async def on_payment_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not stripe_token:
             kb = InlineKeyboardMarkup([
                 [InlineKeyboardButton("💬 Contatta Admin @marcogiuridio", url="https://t.me/marcogiuridio")],
-                [InlineKeyboardButton("💬 Contatta Admin @banu", url="https://t.me/banu")]
+                [InlineKeyboardButton("💬 Contatta Admin @banu80", url="https://t.me/banu80")]
             ])
             await query.message.reply_text(
                 "💳 Per pagare via Satispay, PayPal o Carte di Credito, contatta direttamente gli admin:",
                 reply_markup=kb
             )
             return
+
 
         title = "Candidato Premium Horeca (30 Giorni)"
         description = "Notifiche push istantanee con contatti diretti dei datori a Torino!"
