@@ -6,7 +6,7 @@
   <title>Profilo Candidato Horeca Torino</title>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
     :root {
       --bg-color: var(--tg-theme-bg-color, #17212b);
@@ -31,46 +31,61 @@
       background-color: var(--bg-color);
       color: var(--text-color);
       padding: 16px;
-      padding-bottom: 90px;
+      padding-bottom: 100px;
     }
 
     .header {
       text-align: center;
-      margin-bottom: 24px;
+      margin-bottom: 20px;
     }
 
     .header-icon {
-      font-size: 40px;
-      margin-bottom: 8px;
+      font-size: 44px;
+      margin-bottom: 6px;
     }
 
     .header h1 {
-      font-size: 20px;
-      font-weight: 700;
+      font-size: 22px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
     }
 
     .header p {
       font-size: 13px;
       color: var(--hint-color);
       margin-top: 4px;
+      line-height: 1.4;
     }
 
     .section {
       background: var(--secondary-bg);
-      border-radius: 14px;
-      padding: 16px;
-      margin-bottom: 16px;
+      border-radius: 16px;
+      padding: 18px;
+      margin-bottom: 18px;
       border: 1px solid var(--border-color);
     }
 
     .section-title {
-      font-size: 14px;
-      font-weight: 600;
-      margin-bottom: 12px;
+      font-size: 15px;
+      font-weight: 700;
+      margin-bottom: 14px;
       display: flex;
       align-items: center;
-      gap: 6px;
+      gap: 8px;
       color: var(--text-color);
+    }
+
+    .sub-category {
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.8px;
+      text-transform: uppercase;
+      color: var(--button-color);
+      margin: 14px 0 8px 0;
+    }
+
+    .sub-category:first-of-type {
+      margin-top: 4px;
     }
 
     .pills-grid {
@@ -96,10 +111,17 @@
       background: var(--button-color);
       color: var(--button-text);
       border-color: var(--button-color);
+      box-shadow: 0 2px 10px rgba(36, 129, 204, 0.3);
+    }
+
+    .pill.pill-cert.selected {
+      background: #2e7d32;
+      border-color: #2e7d32;
+      box-shadow: 0 2px 10px rgba(46, 125, 50, 0.3);
     }
 
     .input-group {
-      margin-bottom: 12px;
+      margin-bottom: 14px;
     }
 
     .input-group:last-child {
@@ -109,19 +131,23 @@
     label {
       display: block;
       font-size: 12px;
+      font-weight: 600;
       color: var(--hint-color);
       margin-bottom: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
     }
 
     input, textarea, select {
       width: 100%;
-      background: rgba(0, 0, 0, 0.2);
+      background: rgba(0, 0, 0, 0.25);
       border: 1px solid var(--border-color);
-      border-radius: 10px;
+      border-radius: 12px;
       padding: 12px;
       font-size: 14px;
       color: var(--text-color);
       outline: none;
+      transition: border 0.2s;
     }
 
     input:focus, textarea:focus, select:focus {
@@ -130,7 +156,7 @@
 
     textarea {
       resize: none;
-      height: 70px;
+      height: 75px;
     }
 
     .footer-btn-container {
@@ -139,7 +165,7 @@
       left: 0;
       right: 0;
       background: var(--bg-color);
-      padding: 12px 16px;
+      padding: 14px 16px;
       border-top: 1px solid var(--border-color);
       z-index: 100;
     }
@@ -149,11 +175,12 @@
       background: var(--button-color);
       color: var(--button-text);
       border: none;
-      border-radius: 12px;
-      padding: 14px;
-      font-size: 15px;
-      font-weight: 600;
+      border-radius: 14px;
+      padding: 15px;
+      font-size: 16px;
+      font-weight: 700;
       cursor: pointer;
+      box-shadow: 0 4px 15px rgba(36, 129, 204, 0.4);
     }
 
     .btn-submit:active {
@@ -166,37 +193,76 @@
   <div class="header">
     <div class="header-icon">🍸</div>
     <h1>Profilo Candidato Horeca</h1>
-    <p>Registra le tue skill per ricevere offerte di lavoro su misura a Torino</p>
+    <p>Seleziona i ruoli e le tue skill per ricevere annunci di lavoro in target a Torino</p>
   </div>
 
   <form id="profileForm">
     <!-- RUOLI -->
     <div class="section">
-      <div class="section-title">💼 Ruolo/i cercati (seleziona anche più di uno)</div>
+      <div class="section-title">💼 Ruolo/i Cercati</div>
       <div class="pills-grid" id="rolesGrid">
         <div class="pill" data-value="Barista">☕ Barista</div>
         <div class="pill" data-value="Bartender">🍹 Bartender</div>
         <div class="pill" data-value="Cameriere">🍽️ Cameriere/a</div>
         <div class="pill" data-value="Cuoco">👨‍🍳 Cuoco/a</div>
         <div class="pill" data-value="Aiuto Cuoco">🍳 Aiuto Cuoco</div>
+        <div class="pill" data-value="Pizzaiolo">🍕 Pizzaiolo/a</div>
+        <div class="pill" data-value="Banconista">🍦 Banconista</div>
         <div class="pill" data-value="Lavapiatti">🧽 Lavapiatti</div>
         <div class="pill" data-value="Responsabile">📊 Responsabile Bar/Sala</div>
       </div>
     </div>
 
-    <!-- SKILL -->
+    <!-- SKILL E COMPETENZE DIVISE PER CATEGORIA -->
     <div class="section">
       <div class="section-title">⚡ Competenze & Skill</div>
-      <div class="pills-grid" id="skillsGrid">
+
+      <div class="sub-category">☕ Caffetteria & Bar</div>
+      <div class="pills-grid" id="skillsBar">
+        <div class="pill" data-value="Espresso & Estratti">☕ Espresso & Estratti</div>
         <div class="pill" data-value="Latte Art">🥛 Latte Art</div>
-        <div class="pill" data-value="Cocktails">🍸 Mixology / Cocktails</div>
-        <div class="pill" data-value="Cassa/POS">💳 Gestione Cassa / POS</div>
-        <div class="pill" data-value="HACCP">📜 Attestato HACCP</div>
-        <div class="pill" data-value="Inglese">🇬🇧 Inglese parlato</div>
-        <div class="pill" data-value="Sommelier">🍷 Vini / Sommelier</div>
-        <div class="pill" data-value="Caffetteria avanzata">☕ Caffetteria Avanzata</div>
-        <div class="pill" data-value="Cucina calda">🔥 Cucina Calda</div>
-        <div class="pill" data-value="Pasticceria">🍰 Pasticceria</div>
+        <div class="pill" data-value="Cappuccini Veloci">⚡ Cappuccini Veloci</div>
+        <div class="pill" data-value="Caffetteria Avanzata">🌟 Caffetteria Avanzata</div>
+        <div class="pill" data-value="Pulizia Macchina">🧽 Pulizia Macchina</div>
+        <div class="pill" data-value="Preparazione Aperitivi">🍹 Preparazione Aperitivi</div>
+      </div>
+
+      <div class="sub-category">🍸 Barman & Mixology</div>
+      <div class="pills-grid" id="skillsMixology">
+        <div class="pill" data-value="Cocktails Classici">🍸 Cocktails Classici</div>
+        <div class="pill" data-value="Mixology & Home-made">🧪 Mixology & Home-made</div>
+        <div class="pill" data-value="Speakeasy / Flair">🔥 Speakeasy / Flair</div>
+        <div class="pill" data-value="Carta Cocktails & Spirits">📜 Carta Cocktails & Spirits</div>
+        <div class="pill" data-value="Barman Discoteca / Eventi">🎉 Barman Discoteca / Eventi</div>
+      </div>
+
+      <div class="sub-category">🍽️ Sala & Servizio</div>
+      <div class="pills-grid" id="skillsSala">
+        <div class="pill" data-value="Servizio al Tavolo">🍽️ Servizio al Tavolo</div>
+        <div class="pill" data-value="Presa Comande">📱 Presa Comande (Palmare)</div>
+        <div class="pill" data-value="Cassa & POS">💳 Cassa & POS</div>
+        <div class="pill" data-value="Sommelier & Vini">🍷 Sommelier & Vini</div>
+        <div class="pill" data-value="Taglieri & Apericena">🧀 Taglieri & Apericena</div>
+        <div class="pill" data-value="Inglese Ristorazione">🇬🇧 Inglese Ristorazione</div>
+      </div>
+
+      <div class="sub-category">👨‍🍳 Cucina & Pizzeria</div>
+      <div class="pills-grid" id="skillsCucina">
+        <div class="pill" data-value="Cucina Calda">🔥 Cucina Calda</div>
+        <div class="pill" data-value="Antipasti & Linea Fredda">🥗 Linea Fredda</div>
+        <div class="pill" data-value="Stesura Pizza & Forno">🍕 Stesura Pizza & Forno</div>
+        <div class="pill" data-value="Pasticceria & Dolci">🍰 Pasticceria & Dolci</div>
+        <div class="pill" data-value="Preparazione Linea Cucina">🔪 Prep. Linea Cucina</div>
+      </div>
+
+      <div class="sub-category">📜 Certificazioni, Corsi & Requisiti</div>
+      <div class="pills-grid" id="skillsCert">
+        <div class="pill pill-cert" data-value="Attestato HACCP">📜 Attestato HACCP</div>
+        <div class="pill pill-cert" data-value="Primo Soccorso">🩺 Corso Primo Soccorso</div>
+        <div class="pill pill-cert" data-value="Antincendio">🧯 Corso Antincendio</div>
+        <div class="pill pill-cert" data-value="Sicurezza Lavoro D.Lgs 81/08">🛡️ Sicurezza Lavoro 81/08</div>
+        <div class="pill pill-cert" data-value="Automunito / Patente B">🚗 Automunito / Patente B</div>
+        <div class="pill pill-cert" data-value="Disponibilità Festivi & Notturni">🌙 Festivi & Notturni</div>
       </div>
     </div>
 
@@ -225,7 +291,7 @@
 
     <!-- ZONE DI TORINO -->
     <div class="section">
-      <div class="section-title">📍 Zone di Torino preferite</div>
+      <div class="section-title">📍 Zone preferite (Torino e Provincia)</div>
       <div class="pills-grid" id="zonesGrid">
         <div class="pill" data-value="Centro">Centro</div>
         <div class="pill" data-value="San Salvario">San Salvario</div>
@@ -236,20 +302,23 @@
         <div class="pill" data-value="Barriera di Milano">Barriera di Milano</div>
         <div class="pill" data-value="Lingotto">Lingotto</div>
         <div class="pill" data-value="San Donato">San Donato</div>
+        <div class="pill" data-value="Cit Turin">Cit Turin</div>
+        <div class="pill" data-value="Parella">Parella</div>
+        <div class="pill" data-value="Mirafiori">Mirafiori</div>
         <div class="pill" data-value="Provincia di Torino">Provincia di Torino</div>
       </div>
     </div>
 
     <!-- CONTATTI -->
     <div class="section">
-      <div class="section-title">📱 Contatto & Presentazione</div>
+      <div class="section-title">📱 Contatti & Presentazione</div>
       <div class="input-group">
-        <label>Numero di telefono / WhatsApp (opzionale per i datori)</label>
+        <label>Numero di telefono / WhatsApp</label>
         <input type="tel" id="phoneInput" placeholder="es. +39 340 1234567">
       </div>
       <div class="input-group">
         <label>Breve descrizione / Note personali</label>
-        <textarea id="bioInput" placeholder="es. Ho lavorato 2 anni in un lounge bar in centro, cerco posto fisso o extra weekend..."></textarea>
+        <textarea id="bioInput" placeholder="es. Ho 2 anni di esperienza in caffetteria e cocktail bar in centro, cerco posto fisso o extra weekend..."></textarea>
       </div>
     </div>
   </form>
@@ -265,12 +334,15 @@
       tg.ready();
     }
 
-    // Handle pills selection
+    // Gestione selezione Pills con Vibrazione Aptica
     document.querySelectorAll('.pills-grid').forEach(grid => {
       grid.addEventListener('click', (e) => {
         const pill = e.target.closest('.pill');
         if (!pill) return;
         pill.classList.toggle('selected');
+        if (tg && tg.HapticFeedback) {
+          tg.HapticFeedback.impactOccurred('light');
+        }
       });
     });
 
@@ -278,10 +350,19 @@
       return Array.from(document.querySelectorAll(`#${gridId} .pill.selected`)).map(p => p.dataset.value);
     }
 
-    document.getElementById('submitBtn').addEventListener('click', async () => {
+    function getAllSelectedSkills() {
+      const grids = ['skillsBar', 'skillsMixology', 'skillsSala', 'skillsCucina', 'skillsCert'];
+      let skills = [];
+      grids.forEach(g => {
+        skills = skills.concat(getSelectedPills(g));
+      });
+      return skills;
+    }
+
+    async function submitProfile() {
       const submitBtn = document.getElementById('submitBtn');
       const roles = getSelectedPills('rolesGrid');
-      const skills = getSelectedPills('skillsGrid');
+      const skills = getAllSelectedSkills();
       const availability = getSelectedPills('availGrid');
       const zones = getSelectedPills('zonesGrid');
       const experience = document.getElementById('experienceSelect').value;
@@ -312,29 +393,21 @@
         bio: bio
       };
 
-      let saved = false;
-
-      // 1. Prova API fetch POST se user_id è disponibile
       if (payload.user_id) {
         try {
-          const res = await fetch('/api/save_profile', {
+          await fetch('/api/save_profile', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
           });
-          if (res.ok) {
-            saved = true;
-          }
         } catch(e) {
           console.error('API Fetch error:', e);
         }
       }
 
-      // 2. Prova sendData di Telegram (per tastiere native)
       if (tg && tg.sendData) {
         try {
           tg.sendData(JSON.stringify(payload));
-          saved = true;
         } catch(e) {
           console.error('tg.sendData error:', e);
         }
@@ -343,15 +416,20 @@
       submitBtn.style.background = '#4caf50';
       submitBtn.innerText = '✅ Profilo Salvato!';
 
+      if (tg && tg.HapticFeedback) {
+        tg.HapticFeedback.notificationOccurred('success');
+      }
+
       setTimeout(() => {
         if (tg && tg.close) {
           tg.close();
         } else {
-          alert('Profilo salvato con successo! Puoi chiudere questa schermata.');
+          alert('Profilo salvato con successo!');
         }
       }, 800);
-    });
+    }
+
+    document.getElementById('submitBtn').addEventListener('click', submitProfile);
   </script>
 </body>
 </html>
-

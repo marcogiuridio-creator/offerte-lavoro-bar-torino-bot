@@ -18,6 +18,8 @@ ROLE_KEYWORDS = {
     "Cuoco": ["cuoco", "cuoca", "chef", "primi piatti", "secondi"],
     "Aiuto Cuoco": ["aiuto cuoco", "aiuto cuoca", "commis di cucina", "preparazione cibi"],
     "Lavapiatti": ["lavapiatti", "plonge", "pulizia cucina"],
+    "Pizzaiolo": ["pizzaiolo", "pizzaiola", "fornaio", "stesura pizza"],
+    "Banconista": ["banconista", "gelateria", "gastronomia", "pasticceria"],
     "Responsabile": ["responsabile", "maître", "head bartender", "direttore locale"]
 }
 
@@ -32,7 +34,10 @@ ZONE_KEYWORDS = {
     "Barriera di Milano": ["barriera di milano", "corso palermo", "piazza rebaudengo"],
     "Lingotto": ["lingotto", "via nizza sud", "spezia"],
     "San Donato": ["san donato", "piazza statuto"],
-    "Provincia di Torino": ["provincia", "moncalieri", "rivoli", "collegno", "grugliasco", "settimo", "venaria"]
+    "Parella": ["parella", "corso monte cucco"],
+    "Cit Turin": ["cit turin", "piazza bernini"],
+    "Mirafiori": ["mirafiori", "corso unione sovietica"],
+    "Provincia di Torino": ["provincia", "moncalieri", "rivoli", "collegno", "grugliasco", "settimo", "venaria", "nichelino"]
 }
 
 # Keywords per disponibilità
@@ -45,13 +50,36 @@ AVAIL_KEYWORDS = {
 
 # Keywords per skill
 SKILL_KEYWORDS = {
+    "Espresso & Estratti": ["espresso", "caffè", "estrazione", "macinatura"],
     "Latte Art": ["latte art", "cappuccini decorati", "montatura latte"],
-    "Cocktails": ["cocktail", "mixology", "spirits", "drink"],
-    "Cassa/POS": ["cassa", "pos", "chiusura cassa"],
-    "HACCP": ["haccp", "attestato haccp", "igiene alimentare"],
-    "Inglese": ["inglese", "english", "lingue"],
-    "Sommelier": ["vino", "vini", "sommelier", "carta dei vini"]
+    "Cappuccini Veloci": ["cappuccini veloci", "colazioni", "servizio colazione"],
+    "Caffetteria Avanzata": ["caffetteria avanzata", "speciality coffee"],
+    "Pulizia Macchina": ["pulizia macchina", "manutenzione bar"],
+    "Preparazione Aperitivi": ["aperitivi", "spritz", "apericena"],
+    "Cocktails Classici": ["cocktail", "mixology", "drink", "cocktail classici"],
+    "Mixology & Home-made": ["mixology", "home-made", "sciroppi", "preparazioni"],
+    "Speakeasy / Flair": ["flair", "speakeasy", "flair bartending"],
+    "Carta Cocktails & Spirits": ["spirits", "distillati", "carta cocktail"],
+    "Barman Discoteca / Eventi": ["discoteca", "pub", "eventi veloci", "feste"],
+    "Servizio al Tavolo": ["servizio al tavolo", "vassoio", "sala"],
+    "Presa Comande": ["comande", "palmare", "tablet"],
+    "Cassa & POS": ["cassa", "pos", "chiusura cassa"],
+    "Sommelier & Vini": ["sommelier", "vino", "vini", "carta dei vini"],
+    "Taglieri & Apericena": ["taglieri", "affettati", "apericena"],
+    "Inglese Ristorazione": ["inglese", "english", "lingua inglese"],
+    "Cucina Calda": ["cucina calda", "primi", "secondi", "padelle"],
+    "Antipasti & Linea Fredda": ["linea fredda", "antipasti", "insalate"],
+    "Stesura Pizza & Forno": ["stesura pizza", "forno a legna", "forno elettrico"],
+    "Pasticceria & Dolci": ["pasticceria", "dolci", "torte"],
+    "Preparazione Linea Cucina": ["linea cucina", "preparazione ingredienti"],
+    "Attestato HACCP": ["haccp", "attestato haccp", "igiene alimentare"],
+    "Primo Soccorso": ["primo soccorso", "addetto primo soccorso"],
+    "Antincendio": ["antincendio", "rischio medio", "rischio basso"],
+    "Sicurezza Lavoro D.Lgs 81/08": ["81/08", "sicurezza lavoro", "sicurezza sui luoghi"],
+    "Automunito / Patente B": ["automunito", "patente", "patente b", "auto propria"],
+    "Disponibilità Festivi & Notturni": ["festivi", "notturni", "weekend", "turni notturni"]
 }
+
 
 
 def extract_job_details(text: str) -> dict:
