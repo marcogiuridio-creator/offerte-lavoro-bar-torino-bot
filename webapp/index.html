@@ -429,7 +429,66 @@
       }, 800);
     }
 
+    async function loadExistingProfile() {
+      const urlParams = new URLSearchParams(window.location.search);
+      const user = (tg && tg.initDataUnsafe && tg.initDataUnsafe.user) ? tg.initDataUnsafe.user : null;
+      const userId = (user ? user.id : null) || urlParams.get('user_id');
+
+      if (!userId) return;
+
+      try {
+        const resp = await fetch(`/api/get_profile?user_id=${userId}`);
+        const data = await resp.json();
+
+        if (data.status === 'ok' && data.profile) {
+          const p = data.profile;
+          document.querySelector('.header p').innerText = "✏️ Modifica la tua scheda candidato e aggiungi/rimuovi skill in 1-Click";
+          document.getElementById('submitBtn').innerText = "💾 SALVA MODIFICHE PROFILO";
+
+          if (tg && tg.MainButton) {
+            tg.MainButton.setText("💾 SALVA MODIFICHE PROFILO");
+          }
+
+          // Pre-seleziona ruoli
+          if (p.roles) {
+            document.querySelectorAll('#rolesGrid .pill').forEach(pill => {
+              if (p.roles.includes(pill.dataset.value)) pill.classList.add('selected');
+            });
+          }
+
+          // Pre-seleziona skill in tutte le griglie
+          if (p.skills) {
+            document.querySelectorAll('.pills-grid .pill').forEach(pill => {
+              if (p.skills.includes(pill.dataset.value)) pill.classList.add('selected');
+            });
+          }
+
+          // Pre-seleziona disponibilità e zone
+          if (p.availability) {
+            document.querySelectorAll('#availGrid .pill').forEach(pill => {
+              if (p.availability.includes(pill.dataset.value)) pill.classList.add('selected');
+            });
+          }
+          if (p.zones) {
+            document.querySelectorAll('#zonesGrid .pill').forEach(pill => {
+              if (p.zones.includes(pill.dataset.value)) pill.classList.add('selected');
+            });
+          }
+
+          // Pre-compila campi di testo
+          if (p.experience) document.getElementById('experienceSelect').value = p.experience;
+          if (p.phone) document.getElementById('phoneInput').value = p.phone;
+          if (p.bio) document.getElementById('bioInput').value = p.bio;
+        }
+      } catch(e) {
+        console.error('Errore caricamento profilo esistente:', e);
+      }
+    }
+
+    loadExistingProfile();
+
     document.getElementById('submitBtn').addEventListener('click', submitProfile);
   </script>
 </body>
 </html>
+

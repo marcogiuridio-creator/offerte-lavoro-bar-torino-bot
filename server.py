@@ -25,7 +25,45 @@ class WebAppHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
         elif self.path.startswith("/dashboard.html"):
             self.path = "/webapp" + self.path
 
+        if self.path.startswith("/api/get_profile"):
+            try:
+                import urllib.parse
+                parsed = urllib.parse.urlparse(self.path)
+                params = urllib.parse.parse_qs(parsed.query)
+                user_id = int(params.get("user_id", [0])[0])
+
+                profile = db.get_candidate_profile(user_id)
+                if profile:
+                    res = {
+                        "status": "ok",
+                        "profile": {
+                            "user_id": profile["user_id"],
+                            "first_name": profile.get("first_name", ""),
+                            "username": profile.get("username", ""),
+                            "roles": json.loads(profile["roles"]) if profile.get("roles") else [],
+                            "skills": json.loads(profile["skills"]) if profile.get("skills") else [],
+                            "experience": profile.get("experience", ""),
+                            "availability": json.loads(profile["availability"]) if profile.get("availability") else [],
+                            "zones": json.loads(profile["zones"]) if profile.get("zones") else [],
+                            "phone": profile.get("phone", ""),
+                            "bio": profile.get("bio", ""),
+                            "is_premium": profile.get("is_premium", 0)
+                        }
+                    }
+                else:
+                    res = {"status": "not_found"}
+
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/json')
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.end_headers()
+                self.wfile.write(json.dumps(res).encode('utf-8'))
+                return
+            except Exception as e:
+                logger.error(f"Errore GET profile API: {e}")
+
         if self.path.startswith("/api/get_employer_candidates"):
+
 
             try:
                 import urllib.parse

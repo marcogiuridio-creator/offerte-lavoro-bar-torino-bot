@@ -1060,6 +1060,8 @@ async def cmd_profilo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     zones = ", ".join(json.loads(profile["zones"])) if profile["zones"] else "Tutta Torino"
     avail = ", ".join(json.loads(profile["availability"])) if profile["availability"] else "Non specificata"
 
+    edit_url = f"{config.WEBAPP_URL}&user_id={user.id}" if "?" in config.WEBAPP_URL else f"{config.WEBAPP_URL}?user_id={user.id}"
+
     msg = (
         f"👤 *IL TUO PROFILO CANDIDATO HORECA*\n"
         f"Stato: {status_badge}\n\n"
@@ -1070,15 +1072,17 @@ async def cmd_profilo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"📍 *Zone preferite:* {zones}\n"
         f"📱 *Telefono:* {profile['phone'] or 'Non fornito'}\n"
         f"📝 *Note:* {profile['bio'] or 'Nessuna'}\n\n"
-        f"🔄 Per aggiornare i dati, usa `/registrati`. Per il Premium: `/premium`"
+        f"💡 *Vuoi aggiungere nuove skill o modificare i tuoi dati? Clicca il tasto qui sotto:*"
     )
 
-    keyboard = ReplyKeyboardMarkup(
-        [[KeyboardButton("✏️ Modifica Profilo", web_app=WebAppInfo(url=config.WEBAPP_URL))]],
-        resize_keyboard=True
-    )
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("✏️ Modifica Scheda & Skill (Mini-App)", web_app=WebAppInfo(url=edit_url))],
+        [InlineKeyboardButton("⭐ Passa a Premium (2,19€)", callback_data="pay_stars")]
+    ])
 
-    await send_smart_reply(update, context, msg, reply_markup=keyboard, deep_link_arg="registrati")
+    await send_smart_reply(update, context, msg, reply_markup=keyboard, deep_link_arg="profilo")
+
+
 
 
 
