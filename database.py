@@ -109,7 +109,33 @@ def init_db():
         except Exception:
             pass
 
+        # Migration colonna role per tagging datori/lavoratori
+        try:
+            conn.execute("ALTER TABLE users ADD COLUMN role TEXT DEFAULT NULL")
+        except Exception:
+            pass
 
+        # Migration colonna offerte_count per tracciare attività datori
+        try:
+            conn.execute("ALTER TABLE users ADD COLUMN offerte_count INTEGER DEFAULT 0")
+        except Exception:
+            pass
+
+        # Auto-seed: importa utenti da seed_users.json se la tabella users è vuota
+        count = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+        if count == 0:
+            import json
+            import os
+            seed_path = os.path.join(os.path.dirname(__file__), "seed_users.json")
+            if os.path.exists(seed_path):
+                with open(seed_path, "r", encoding="utf-8") as f:
+                    seed_data = json.load(f)
+                for u in seed_data:
+                    conn.execute("""
+                        INSERT OR IGNORE INTO users (user_id, username, first_name, last_name, role, offerte_count)
+                        VALUES (?, '', ?, '', ?, ?)
+                    """, (u["user_id"], u.get("name", "Utente"), u.get("role", ""), u.get("count", 0)))
+                print(f"🌱 Auto-seed completato: {len(seed_data)} utenti importati da seed_users.json")
 
 
 # ─── Users ────────────────────────────────────────────────────────────────────
@@ -150,6 +176,53 @@ def unban_user(user_id: int):
 def verify_user(user_id: int):
     with get_conn() as conn:
         conn.execute("UPDATE users SET is_verified = 1 WHERE user_id = ?", (user_id,))
+
+
+def tag_user_role(user_id: int, role: str):
+    """Tagga un utente come 'datore' o 'lavoratore'."""
+    with get_conn() as conn:
+        conn.execute("UPDATE users SET role = ? WHERE user_id = ?", (role, user_id))
+
+
+def import_user_with_role(user_id: int, username: str, first_name: str, role: str, offerte_count: int = 0):
+    """Importa un utente con ruolo e conteggio offerte (per import massivo da result.json)."""
+    with get_conn() as conn:
+        conn.execute("""
+            INSERT INTO users (user_id, username, first_name, last_name, role, offerte_count)
+            VALUES (?, ?, ?, '', ?, ?)
+            ON CONFLICT(user_id) DO UPDATE SET
+                username = COALESCE(NULLIF(excluded.username, ''), users.username),
+                first_name = COALESCE(NULLIF(excluded.first_name, ''), users.first_name),
+                role = excluded.role,
+                offerte_count = excluded.offerte_count
+        """, (user_id, username, first_name, role, offerte_count))
+
+
+def get_users_by_role(role: str, limit: int = 50):
+    """Recupera gli utenti per ruolo ordinati per numero di offerte/post."""
+    with get_conn() as conn:
+        return conn.execute("""
+            SELECT * FROM users
+            WHERE role = ?
+            ORDER BY offerte_count DESC, last_post DESC
+            LIMIT ?
+        """, (role, limit)).fetchall()
+
+
+def count_users_by_role():
+    """Conta gli utenti per ruolo."""
+    with get_conn() as conn:
+        datori = conn.execute("SELECT COUNT(*) FROM users WHERE role = 'datore'").fetchone()[0]
+        lavoratori = conn.execute("SELECT COUNT(*) FROM users WHERE role = 'lavoratore'").fetchone()[0]
+        totale = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+        return {"datori": datori, "lavoratori": lavoratori, "totale": totale}
+
+
+def get_all_datori_ids():
+    """Restituisce tutti gli user_id dei datori di lavoro per broadcast."""
+    with get_conn() as conn:
+        rows = conn.execute("SELECT user_id FROM users WHERE role = 'datore'").fetchall()
+        return [r["user_id"] for r in rows]
 
 
 # ─── Rate limiting ─────────────────────────────────────────────────────────────

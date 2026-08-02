@@ -214,6 +214,12 @@ async def on_group_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Registra il post
         db.record_post(user_id, msg.message_id, category, text)
 
+        # Auto-tagging CRM: classifica automaticamente l'utente come datore o lavoratore
+        if category == "OFFERTA":
+            db.tag_user_role(user_id, "datore")
+        elif category == "RICHIESTA":
+            db.tag_user_role(user_id, "lavoratore")
+
         # Aggiungi emoji categoria come reazione (reaction) o risposta silenziosa
         emoji = get_category_emoji(category)
         logger.info(f"{emoji} {format_category_label(category)} da {user.first_name}: {text[:60]}...")
@@ -1289,9 +1295,110 @@ async def cmd_test_offerta(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode=ParseMode.MARKDOWN
     )
 
+# ─── CRM Admin: Gestione Titolari & Lavoratori ────────────────────────────────
+
+async def cmd_titolari(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Comando Admin: /titolari — mostra la lista dei titolari/datori di lavoro identificati."""
+    if not is_admin(update.effective_user.id):
+        return
+
+    counts = db.count_users_by_role()
+    top_datori = db.get_users_by_role("datore", limit=30)
+
+    lines = [
+        f"🏪 *CRM TITOLARI / DATORI DI LAVORO*\n",
+        f"📊 *Datori identificati:* {counts['datori']}",
+        f"👨‍🍳 *Lavoratori identificati:* {counts['lavoratori']}",
+        f"👥 *Totale nel DB:* {counts['totale']}\n",
+        f"👑 *I 30 TITOLARI PIÙ ATTIVI:*\n",
+    ]
+
+    for idx, d in enumerate(top_datori, 1):
+        name = d["first_name"] or "Utente"
+        uname = f" (@{d['username']})" if d["username"] else ""
+        cnt = d["offerte_count"] or 0
+        lines.append(f"{idx}. *{name}*{uname} — {cnt} offerte")
+
+    lines.append(f"\n💡 _Usa /broadcast\\_titolari \\<messaggio\\> per contattarli tutti in privato_")
+    await update.message.reply_text("\n".join(lines), parse_mode=ParseMode.MARKDOWN)
+
+
+async def cmd_lavoratori(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Comando Admin: /lavoratori — mostra la lista dei lavoratori/candidati identificati."""
+    if not is_admin(update.effective_user.id):
+        return
+
+    counts = db.count_users_by_role()
+    top_lavoratori = db.get_users_by_role("lavoratore", limit=30)
+
+    lines = [
+        f"👨‍🍳 *CRM LAVORATORI / CANDIDATI*\n",
+        f"👨‍🍳 *Lavoratori identificati:* {counts['lavoratori']}",
+        f"🏪 *Datori identificati:* {counts['datori']}",
+        f"👥 *Totale nel DB:* {counts['totale']}\n",
+        f"🔝 *I 30 LAVORATORI PIÙ ATTIVI:*\n",
+    ]
+
+    for idx, d in enumerate(top_lavoratori, 1):
+        name = d["first_name"] or "Utente"
+        uname = f" (@{d['username']})" if d["username"] else ""
+        lines.append(f"{idx}. *{name}*{uname}")
+
+    await update.message.reply_text("\n".join(lines), parse_mode=ParseMode.MARKDOWN)
+
+
+async def cmd_broadcast_titolari(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Comando Admin: /broadcast_titolari <messaggio> — invia un messaggio promozionale in privato a tutti i titolari."""
+    if not is_admin(update.effective_user.id):
+        return
+
+    if not context.args:
+        await update.message.reply_text(
+            "📢 *Uso:* `/broadcast_titolari <messaggio>`\n\n"
+            "Esempio:\n"
+            "`/broadcast_titolari 🔝 Ciao! Vuoi mettere il tuo annuncio IN EVIDENZA per 24h a soli 5,39€? Rispondi a questo messaggio per info!`",
+            parse_mode=ParseMode.MARKDOWN
+        )
+        return
+
+    message_text = " ".join(context.args)
+    datori_ids = db.get_all_datori_ids()
+
+    await update.message.reply_text(
+        f"📢 *Broadcast avviato verso {len(datori_ids)} titolari...*\n"
+        f"⏳ Questo potrebbe richiedere qualche minuto.",
+        parse_mode=ParseMode.MARKDOWN
+    )
+
+    sent = 0
+    failed = 0
+    for uid in datori_ids:
+        try:
+            await context.bot.send_message(
+                chat_id=uid,
+                text=message_text,
+                parse_mode=ParseMode.MARKDOWN
+            )
+            sent += 1
+        except Exception:
+            failed += 1
+
+        # Rispetta rate limit Telegram (30 msg/sec max)
+        if sent % 25 == 0:
+            import asyncio
+            await asyncio.sleep(1.5)
+
+    await update.message.reply_text(
+        f"✅ *Broadcast completato!*\n\n"
+        f"📬 Inviati con successo: *{sent}*\n"
+        f"❌ Non recapitati (bot non avviato): *{failed}*\n"
+        f"📊 Totale destinatari: *{len(datori_ids)}*",
+        parse_mode=ParseMode.MARKDOWN
+    )
+
+
 
 async def post_init(application: Application):
-
     """Configura automaticamente il menu comandi nativo di Telegram con le relative icone."""
     commands = [
         BotCommand("registrati", "🍸 Registra / Modifica Profilo Candidato"),
@@ -1341,8 +1448,10 @@ def main():
     app.add_handler(CommandHandler("match", cmd_match))
     app.add_handler(CommandHandler("test_offerta", cmd_test_offerta))
 
-
-
+    # CRM Admin: Gestione Titolari & Lavoratori
+    app.add_handler(CommandHandler("titolari", cmd_titolari))
+    app.add_handler(CommandHandler("lavoratori", cmd_lavoratori))
+    app.add_handler(CommandHandler("broadcast_titolari", cmd_broadcast_titolari))
 
 
     # Data da WebApp Telegram
