@@ -1293,6 +1293,62 @@ async def on_webapp_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     currency=currency,
                     prices=prices,
                 )
+
+        elif action == "edit_job_offer":
+            job_id = data.get("job_id")
+            if job_id:
+                job_id = int(job_id)
+                business = data.get("business_name", "").strip()
+                role = data.get("role", "").strip()
+                zone = data.get("zone", "").strip()
+                shift = data.get("shift", "").strip()
+                salary = data.get("salary", "").strip()
+                desc = data.get("description", "").strip()
+                contact = data.get("contact", "").strip()
+
+                db.update_job_offer(
+                    job_id=job_id,
+                    business_name=business,
+                    role=role,
+                    zone=zone,
+                    shift=shift,
+                    salary=salary,
+                    description=desc,
+                    contact=contact
+                )
+
+                job = db.get_job_offer(job_id)
+                if job and job.get("message_id") and config.GROUP_ID != 0:
+                    try:
+                        pkg = job["package"]
+                        header = "📢 *OFFERTA DI LAVORO*" if pkg == "free" else ("🔝 *OFFERTA IN EVIDENZA (SPONSOR 24H)* 🔝" if pkg == "evidenza" else "👑 *SPONSOR VIP (7 GIORNI IN CIMA)* 👑")
+                        updated_text = (
+                            f"{header}\n\n"
+                            f"🏪 *LOCALE:* {business.upper()}\n"
+                            f"💼 *Ruolo Cercato:* {role}\n"
+                            f"📍 *Zona:* {zone}\n"
+                            f"⏰ *Turni:* {shift}\n"
+                            f"💰 *Paga:* {salary if salary else 'Trattabile'}\n\n"
+                            f"📝 *Descrizione & Requisiti:*\n_{desc}_\n\n"
+                            f"📞 *Contatto Candidature:* {contact}\n"
+                            f"👤 *Pubblicato da:* @{user.username if user.username else user.first_name}\n"
+                            f"✏️ _(Annuncio Aggiornato dal Datore)_"
+                        )
+                        await context.bot.edit_message_text(
+                            chat_id=config.GROUP_ID,
+                            message_id=job["message_id"],
+                            text=updated_text,
+                            parse_mode=ParseMode.MARKDOWN
+                        )
+                    except Exception as e_tg:
+                        logger.warning(f"Impossibile aggiornare messaggio Telegram per job #{job_id}: {e_tg}")
+
+                await update.effective_message.reply_text(
+                    f"✏️ *ANNUNCIO #{job_id} MODIFICATO CON SUCCESSO!*\n\n"
+                    "Le modifiche sono state salvate nel database e il messaggio nel gruppo Telegram è stato aggiornato in tempo reale.",
+                    parse_mode=ParseMode.MARKDOWN
+                )
+
     except Exception as e:
         logger.error(f"Errore salvataggio dati WebApp: {e}")
         await update.effective_message.reply_text("❌ Si è verificato un errore. Riprova con `/pubblica`.")
@@ -1464,9 +1520,12 @@ async def cmd_mie_offerte(update: Update, context: ContextTypes.DEFAULT_TYPE):
         pkg = job["package"]
         created = job["created_at"]
 
+        edit_url = f"{config.WEBAPP_PUBBLICA_URL}&edit_job_id={job_id}" if "?" in config.WEBAPP_PUBBLICA_URL else f"{config.WEBAPP_PUBBLICA_URL}?edit_job_id={job_id}"
+        dash_url = f"{config.WEBAPP_DASHBOARD_URL}&job_id={job_id}" if "?" in config.WEBAPP_DASHBOARD_URL else f"{config.WEBAPP_DASHBOARD_URL}?job_id={job_id}"
+
         kb = InlineKeyboardMarkup([
-            [InlineKeyboardButton("✏️ Modifica Annuncio (Mini-App)", web_app=WebAppInfo(url=f"{config.WEBAPP_PUBBLICA_URL}?edit_job_id={job_id}"))],
-            [InlineKeyboardButton("📊 Dashboard Candidati", web_app=WebAppInfo(url=f"{config.WEBAPP_DASHBOARD_URL}?job_id={job_id}"))]
+            [InlineKeyboardButton("✏️ Modifica Annuncio (Mini-App)", web_app=WebAppInfo(url=edit_url))],
+            [InlineKeyboardButton("📊 Dashboard Candidati", web_app=WebAppInfo(url=dash_url))]
         ])
 
         msg = (
@@ -1494,8 +1553,10 @@ async def cmd_edit_offerta(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(f"❌ Annuncio #{job_id} non trovato nel database.")
             return
 
+        edit_url = f"{config.WEBAPP_PUBBLICA_URL}&edit_job_id={job_id}" if "?" in config.WEBAPP_PUBBLICA_URL else f"{config.WEBAPP_PUBBLICA_URL}?edit_job_id={job_id}"
+
         kb = InlineKeyboardMarkup([
-            [InlineKeyboardButton("✏️ Modifica Annuncio come Admin", web_app=WebAppInfo(url=f"{config.WEBAPP_PUBBLICA_URL}?edit_job_id={job_id}"))]
+            [InlineKeyboardButton("✏️ Modifica Annuncio come Admin", web_app=WebAppInfo(url=edit_url))]
         ])
 
         msg = (
@@ -1508,6 +1569,7 @@ async def cmd_edit_offerta(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(msg, reply_markup=kb, parse_mode=ParseMode.MARKDOWN)
     except Exception as e:
         await update.message.reply_text(f"❌ Errore: {e}")
+
 
 
 
