@@ -102,7 +102,8 @@ Scrivi a @{admin_username} per prenotare!
 """.strip()
 
 # ─── Testo admin username ──────────────────────────────────────────────────────
-ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "marcogiuridio")
+ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "marcogiuridio o @banu")
+
 
 # ─── Database ──────────────────────────────────────────────────────────────────
 DB_PATH = os.getenv("DB_PATH", "bot_data.db")
