@@ -507,6 +507,13 @@ def get_job_offer(job_id: int):
         return conn.execute("SELECT * FROM job_offers WHERE job_id = ?", (job_id,)).fetchone()
 
 
+def verify_job_offer(job_id: int):
+    """Segna un annuncio di lavoro come verificato/pagato."""
+    with get_conn() as conn:
+        conn.execute("UPDATE job_offers SET is_verified = 1 WHERE job_id = ?", (job_id,))
+
+
+
 def update_job_offer(
     job_id: int,
     business_name: str,

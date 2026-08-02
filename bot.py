@@ -746,7 +746,32 @@ async def successful_payment_callback(update: Update, context: ContextTypes.DEFA
 
     # SE È UN ANNUNCIO DI LAVORO A PAGAMENTO (250 o 500 STELLE)
     if payload.startswith("job_offer_") or "pending_job" in context.user_data:
-        job = context.user_data.get("pending_job", {})
+        job = None
+        job_id = None
+
+        if payload.startswith("job_offer_id_"):
+            try:
+                job_id_val = int(payload.replace("job_offer_id_", ""))
+                job_db = db.get_job_offer(job_id_val)
+                if job_db:
+                    db.verify_job_offer(job_id_val)
+                    job_id = job_id_val
+                    job = {
+                        "pkg": job_db["package"],
+                        "business": job_db["business_name"],
+                        "role": job_db["role"],
+                        "zone": job_db["zone"],
+                        "shift": job_db["shift"],
+                        "salary": job_db["salary"],
+                        "desc": job_db["description"],
+                        "contact": job_db["contact"]
+                    }
+            except Exception as e:
+                logger.warning(f"Errore parsing job_offer_id: {e}")
+
+        if not job:
+            job = context.user_data.get("pending_job", {})
+
         pkg = job.get("pkg", "evidenza")
         business = job.get("business", "BAR / LOCALE TORINO")
         role = job.get("role", "")
@@ -770,19 +795,21 @@ async def successful_payment_callback(update: Update, context: ContextTypes.DEFA
             f"👤 *Pubblicato da:* @{user.username if user.username else user.first_name}"
         )
 
-        job_id = db.create_job_offer(
-            user_id=user.id,
-            username=user.username or "",
-            business_name=business,
-            role=role,
-            zone=zone,
-            shift=shift,
-            salary=salary,
-            description=desc,
-            contact=contact,
-            package=pkg,
-            is_verified=1
-        )
+        if not job_id:
+            job_id = db.create_job_offer(
+                user_id=user.id,
+                username=user.username or "",
+                business_name=business,
+                role=role,
+                zone=zone,
+                shift=shift,
+                salary=salary,
+                description=desc,
+                contact=contact,
+                package=pkg,
+                is_verified=1
+            )
+
 
         msg_id = None
         if config.GROUP_ID != 0:
@@ -1273,6 +1300,20 @@ async def on_webapp_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
             elif pkg in ["evidenza", "vip"]:
+                job_id = db.create_job_offer(
+                    user_id=user.id,
+                    username=user.username or "",
+                    business_name=business,
+                    role=role,
+                    zone=zone,
+                    shift=shift,
+                    salary=salary,
+                    description=desc,
+                    contact=contact,
+                    package=pkg,
+                    is_verified=0
+                )
+
                 context.user_data["pending_job"] = job_details
                 stars = 250 if pkg == "evidenza" else 500
                 eur_cents = 539 if pkg == "evidenza" else 1090
@@ -1280,7 +1321,7 @@ async def on_webapp_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
                 title = f"Offerta {pkg_name} Horeca"
                 description = f"Annuncio {business} ({role} - {zone}) con Pin e Push Broadcast"
-                payload = f"job_offer_{pkg}_{stars}"
+                payload = f"job_offer_id_{job_id}"
                 currency = "XTR"
                 prices = [LabeledPrice(f"Annuncio {pkg_name}", stars)]
 
