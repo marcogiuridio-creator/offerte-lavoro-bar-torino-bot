@@ -14,17 +14,19 @@ from telegram import (
     ReplyKeyboardMarkup,
     KeyboardButton,
     WebAppInfo,
+    LabeledPrice,
 )
-
 from telegram.ext import (
     Application,
     CommandHandler,
     MessageHandler,
     ChatMemberHandler,
     CallbackQueryHandler,
+    PreCheckoutQueryHandler,
     ContextTypes,
     filters,
 )
+
 from telegram.constants import ParseMode
 
 import config
@@ -586,7 +588,7 @@ async def cmd_registrati(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def cmd_premium(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Comando /premium — info ed attivazione abbonamento Premium."""
+    """Comando /premium — info ed attivazione abbonamento Premium con bottoni di pagamento."""
     user = update.effective_user
     is_prem = db.is_user_premium(user.id)
     profile = db.get_candidate_profile(user.id)
@@ -601,6 +603,12 @@ async def cmd_premium(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception:
             pass
 
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("🌟 Paga 29 Telegram Stars (~2,99€)", callback_data="pay_stars")],
+        [InlineKeyboardButton("💳 Paga 2,99€ con Carta / Stripe", callback_data="pay_stripe")],
+        [InlineKeyboardButton("💬 Paga con Satispay / PayPal (Admin)", url="https://t.me/marcogiuridio")]
+    ])
+
     msg = (
         f"💎 *SERVIZIO CANDIDATO PREMIUM*\n\n"
         f"Stato attuale: {status_str}{until_str}\n\n"
@@ -610,10 +618,93 @@ async def cmd_premium(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"📄 *Invio CV in PDF*: Sblocca il caricamento del tuo CV in formato PDF.\n"
         f"🏷️ *Badge Verificato*: Distintivo di massima serietà.\n\n"
         f"💰 *Costo:* soli *2,99€ / mese*\n\n"
-        f"📲 *COME ATTIVARE:* Scrivi agli admin @marcogiuridio o @banu per attivare la prova o l'abbonamento mensile!"
+        f"👇 Scegli la modalità di pagamento che preferisci:"
     )
 
-    await send_smart_reply(update, context, msg, deep_link_arg="premium")
+    await send_smart_reply(update, context, msg, reply_markup=keyboard, deep_link_arg="premium")
+
+
+async def on_payment_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Gestisce i bottoni di pagamento per Telegram Stars e Stripe."""
+    query = update.callback_query
+    await query.answer()
+    data = query.data
+    chat_id = update.effective_chat.id
+
+    if data == "pay_stars":
+        title = "Candidato Premium Horeca (30 Giorni)"
+        description = "Notifiche push istantanee con contatti diretti dei datori a Torino!"
+        payload = "premium_subscription_stars"
+        currency = "XTR"
+        prices = [LabeledPrice("Abbonamento Premium 30 giorni", 29)]
+
+        try:
+            await context.bot.send_invoice(
+                chat_id=chat_id,
+                title=title,
+                description=description,
+                payload=payload,
+                provider_token="",  # Vuoto per Telegram Stars
+                currency=currency,
+                prices=prices,
+            )
+        except Exception as e:
+            logger.error(f"Errore invio fattura Stars: {e}")
+            await query.message.reply_text("❌ Errore durante l'invio della fattura Telegram Stars. Riprova più tardi.")
+
+    elif data == "pay_stripe":
+        stripe_token = config.STRIPE_PROVIDER_TOKEN
+        if not stripe_token:
+            kb = InlineKeyboardMarkup([
+                [InlineKeyboardButton("💬 Contatta Admin @marcogiuridio", url="https://t.me/marcogiuridio")],
+                [InlineKeyboardButton("💬 Contatta Admin @banu", url="https://t.me/banu")]
+            ])
+            await query.message.reply_text(
+                "💳 Per pagare via Satispay, PayPal o Carte di Credito, contatta direttamente gli admin:",
+                reply_markup=kb
+            )
+            return
+
+        title = "Candidato Premium Horeca (30 Giorni)"
+        description = "Notifiche push istantanee con contatti diretti dei datori a Torino!"
+        payload = "premium_subscription_stripe"
+        currency = "EUR"
+        prices = [LabeledPrice("Abbonamento Premium 30 giorni", 299)]
+
+        try:
+            await context.bot.send_invoice(
+                chat_id=chat_id,
+                title=title,
+                description=description,
+                payload=payload,
+                provider_token=stripe_token,
+                currency=currency,
+                prices=prices,
+            )
+        except Exception as e:
+            logger.error(f"Errore invio fattura Stripe: {e}")
+            await query.message.reply_text("❌ Errore invio fattura Stripe. Contatta l'admin per pagare via PayPal/Satispay.")
+
+
+async def precheckout_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Risponde alla verifica pre-checkout del pagamento."""
+    query = update.pre_checkout_query
+    await query.answer(ok=True)
+
+
+async def successful_payment_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Gestisce l'avvenuto pagamento automatico (Telegram Stars o Stripe)."""
+    user = update.effective_user
+    new_date = db.make_user_premium(user.id, days=30)
+    logger.info(f"🎉 Pagamento completato da {user.first_name} ({user.id})! Premium attivo fino al {new_date}")
+
+    msg = (
+        f"🎉 *PAGAMENTO RICEVUTO CON SUCCESSO!*\n\n"
+        f"Il tuo account è stato aggiornato a *CANDIDATO PREMIUM* fino al *{new_date}*!\n\n"
+        f"✨ *Da ora sei attivo:* riceverai in tempo reale le notifiche push in privato con i contatti diretti (@username o numero di telefono) dei datori di lavoro di Torino appena pubblicano un'offerta!"
+    )
+    await update.message.reply_text(msg, parse_mode=ParseMode.MARKDOWN)
+
 
 
 async def cmd_grant_premium(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -781,11 +872,17 @@ def main():
         on_group_message
     ))
 
-    # Approvazione link (callback dei bottoni inline)
+    # Approvazione link e pagamenti (callback dei bottoni inline)
     app.add_handler(CallbackQueryHandler(on_link_approval, pattern="^link_"))
+    app.add_handler(CallbackQueryHandler(on_payment_button, pattern="^pay_"))
+
+    # Gestione Pagamenti Telegram Stars & Stripe
+    app.add_handler(PreCheckoutQueryHandler(precheckout_callback))
+    app.add_handler(MessageHandler(filters.SUCCESSFUL_PAYMENT, successful_payment_callback))
 
     # Nuovi membri
     app.add_handler(ChatMemberHandler(on_new_member, ChatMemberHandler.CHAT_MEMBER))
+
 
     logger.info("🚀 Bot avviato — in ascolto...")
     app.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
