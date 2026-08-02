@@ -397,15 +397,24 @@
       }
 
       submitBtn.disabled = true;
-      submitBtn.innerText = '⏳ Elaborazione in corso...';
+      submitBtn.innerText = '⏳ Salvataggio in corso...';
 
-      const user = (tg && tg.initDataUnsafe && tg.initDataUnsafe.user) ? tg.initDataUnsafe.user : null;
+      let userId = null;
+      let username = '';
+      if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initDataUnsafe && window.Telegram.WebApp.initDataUnsafe.user) {
+        userId = window.Telegram.WebApp.initDataUnsafe.user.id;
+        username = window.Telegram.WebApp.initDataUnsafe.user.username || '';
+      }
+      const urlParams = new URLSearchParams(window.location.search);
+      if (!userId) {
+        userId = urlParams.get('user_id');
+      }
 
       const payload = {
         action: editingJobId ? 'edit_job_offer' : 'publish_job_offer',
         job_id: editingJobId ? parseInt(editingJobId) : null,
-        user_id: user ? user.id : null,
-        username: user ? (user.username || '') : '',
+        user_id: userId ? parseInt(userId) : null,
+        username: username,
         package: selectedPackage,
         business_name: business,
         role: role,
@@ -418,33 +427,42 @@
 
       if (editingJobId) {
         try {
-          await fetch('/api/update_job_offer', {
+          const resp = await fetch('/api/update_job_offer', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
           });
+          const resData = await resp.json();
+          if (resData.status === 'ok') {
+            submitBtn.innerText = '✅ MODIFICHE SALVATE!';
+            if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.HapticFeedback) {
+              window.Telegram.WebApp.HapticFeedback.notificationOccurred('success');
+            }
+            alert('✅ Annuncio modificato con successo!');
+            setTimeout(() => {
+              if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.close) {
+                window.Telegram.WebApp.close();
+              }
+            }, 400);
+            return;
+          }
         } catch(e) {
-          console.error('Errore update API:', e);
+          console.error('Errore update_job_offer API:', e);
         }
       }
 
-      if (tg && tg.sendData) {
+      // Se è un nuovo annuncio (non una modifica), usa tg.sendData se supportato
+      if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.sendData) {
         try {
-          tg.sendData(JSON.stringify(payload));
+          window.Telegram.WebApp.sendData(JSON.stringify(payload));
         } catch(e) {
           console.error('tg.sendData error:', e);
         }
       }
 
-      if (tg && tg.HapticFeedback) {
-        tg.HapticFeedback.notificationOccurred('success');
-      }
-
       setTimeout(() => {
-        if (tg && tg.close) {
-          tg.close();
-        } else {
-          alert('Modifiche salvate con successo!');
+        if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.close) {
+          window.Telegram.WebApp.close();
         }
       }, 500);
     }
