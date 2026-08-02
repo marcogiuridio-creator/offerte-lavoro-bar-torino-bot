@@ -604,11 +604,10 @@ async def cmd_premium(update: Update, context: ContextTypes.DEFAULT_TYPE):
             pass
 
     keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("🌟 Paga 100 Telegram Stars (2,99€)", callback_data="pay_stars")],
-        [InlineKeyboardButton("💳 Paga 2,99€ con Carta / Stripe", callback_data="pay_stripe")],
+        [InlineKeyboardButton("🌟 Paga 100 Telegram Stars (2,19€)", callback_data="pay_stars")],
+        [InlineKeyboardButton("💳 Paga 2,19€ con Carta / Stripe", callback_data="pay_stripe")],
         [InlineKeyboardButton("💬 Paga con Satispay / PayPal (Admin)", url="https://t.me/marcogiuridio")]
     ])
-
 
     msg = (
         f"💎 *SERVIZIO CANDIDATO PREMIUM*\n\n"
@@ -618,7 +617,7 @@ async def cmd_premium(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"⭐ *Posizionamento in Cima*: Il tuo profilo compare in **prima posizione** quando i bar cercano personale a Torino.\n"
         f"📄 *Invio CV in PDF*: Sblocca il caricamento del tuo CV in formato PDF.\n"
         f"🏷️ *Badge Verificato*: Distintivo di massima serietà.\n\n"
-        f"💰 *Costo:* soli *2,99€ / mese*\n\n"
+        f"💰 *Costo:* soli *2,19€ / mese*\n\n"
         f"👇 Scegli la modalità di pagamento che preferisci:"
     )
 
@@ -638,7 +637,6 @@ async def on_payment_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         payload = "premium_subscription_stars"
         currency = "XTR"
         prices = [LabeledPrice("Abbonamento Premium 30 giorni", 100)]
-
 
         try:
             await context.bot.send_invoice(
@@ -667,12 +665,12 @@ async def on_payment_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return
 
-
         title = "Candidato Premium Horeca (30 Giorni)"
         description = "Notifiche push istantanee con contatti diretti dei datori a Torino!"
         payload = "premium_subscription_stripe"
         currency = "EUR"
-        prices = [LabeledPrice("Abbonamento Premium 30 giorni", 299)]
+        prices = [LabeledPrice("Abbonamento Premium 30 giorni", 219)] # 219 centesimi = 2,19€
+
 
         try:
             await context.bot.send_invoice(

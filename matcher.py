@@ -233,7 +233,8 @@ async def notify_matched_candidates(bot, job_text: str, employer_username: str, 
                 f"💼 *Ruoli:* {roles_str}\n"
                 f"📍 *Zona:* {zones_str}\n\n"
                 f"🔒 *I contatti del titolare e il testo completo sono riservati agli Utenti Premium.*\n"
-                f"⚡ Diventa Premium a soli 2,99€ per sbloccare le notifiche istantanee con i contatti dei datori e candidarti per primo!\n\n"
+                f"⚡ Diventa Premium a soli 2,19€ per sbloccare le notifiche istantanee con i contatti dei datori e candidarti per primo!\n\n"
+
                 f"👉 Scrivi /premium per attivare l'abbonamento!"
             )
 
