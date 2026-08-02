@@ -285,13 +285,35 @@ class WebAppHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
                                                 f"👤 *Pubblicato da:* @{job['username'] if job['username'] else 'Datore'}\n"
                                                 f"✏️ _(Annuncio Aggiornato dal Datore)_"
                                             )
-                                            await bot.edit_message_text(
-                                                chat_id=config.GROUP_ID,
-                                                message_id=msg_id,
-                                                text=updated_text,
-                                                parse_mode=ParseMode.MARKDOWN
-                                            )
-                                            logger.info(f"✅ Messaggio Telegram #{msg_id} modificato nel gruppo per job #{job_id}")
+                                            try:
+                                                await bot.edit_message_text(
+                                                    chat_id=config.GROUP_ID,
+                                                    message_id=msg_id,
+                                                    text=updated_text,
+                                                    parse_mode=ParseMode.MARKDOWN
+                                                )
+                                                logger.info(f"✅ Messaggio Telegram #{msg_id} modificato con successo nel gruppo per job #{job_id}")
+                                            except Exception as e_md:
+                                                logger.warning(f"Fallback Markdown fallito per job #{job_id}: {e_md}. Invio in formato testo semplice...")
+                                                plain_header = "📢 OFFERTA DI LAVORO" if pkg == "free" else ("🔝 OFFERTA IN EVIDENZA (SPONSOR 24H) 🔝" if pkg == "evidenza" else "👑 SPONSOR VIP (7 GIORNI IN CIMA) 👑")
+                                                plain_text = (
+                                                    f"{plain_header}\n\n"
+                                                    f"LOCALE: {job['business_name'].upper()}\n"
+                                                    f"Ruolo Cercato: {job['role']}\n"
+                                                    f"Zona: {job['zone']}\n"
+                                                    f"Turni: {job['shift']}\n"
+                                                    f"Paga: {job['salary'] if job['salary'] else 'Trattabile'}\n\n"
+                                                    f"Descrizione & Requisiti:\n{job['description']}\n\n"
+                                                    f"Contatto Candidature: {job['contact']}\n"
+                                                    f"Pubblicato da: @{job['username'] if job['username'] else 'Datore'}\n"
+                                                    f"(Annuncio Aggiornato dal Datore)"
+                                                )
+                                                await bot.edit_message_text(
+                                                    chat_id=config.GROUP_ID,
+                                                    message_id=msg_id,
+                                                    text=plain_text
+                                                )
+                                                logger.info(f"✅ Messaggio Telegram #{msg_id} modificato in formato testo semplice per job #{job_id}")
                                 except Exception as e_tg:
                                     logger.warning(f"Impossibile aggiornare messaggio Telegram per job #{job_id}: {e_tg}")
 
