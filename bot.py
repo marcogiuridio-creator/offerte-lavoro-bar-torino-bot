@@ -228,15 +228,92 @@ async def on_group_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 
-# ─── Comandi Admin ─────────────────────────────────────────────────────────────
+# ─── Smart Reply & Deep Linking ────────────────────────────────────────────────
+
+async def send_smart_reply(update: Update, context: ContextTypes.DEFAULT_TYPE, text: str, reply_markup=None, deep_link_arg: str = "start"):
+    """
+    Invia risposte ai comandi in modo intelligente:
+    - Se l'utente digita un comando nel GRUPPO (es. /evidenza, /regole):
+      1. Cancella il messaggio del comando dal gruppo per non intasare la chat.
+      2. Invia la risposta in privato all'utente (dove non viene persa o sommersa dagli altri messaggi).
+      3. Se l'utente non ha mai avviato il bot in privato, manda una notifica temporanea di 15s con un bottone deep-link.
+    - Se invocato in PRIVATO: risponde normalmente.
+    """
+    msg = update.message
+    if not msg:
+        return
+
+    chat_type = update.effective_chat.type
+    user = update.effective_user
+
+    if chat_type in ("group", "supergroup"):
+        # 1. Elimina il messaggio del comando nel gruppo
+        try:
+            await msg.delete()
+        except Exception as e:
+            logger.warning(f"Impossibile eliminare messaggio del comando nel gruppo: {e}")
+
+        # 2. Invia in privato
+        try:
+            await context.bot.send_message(
+                chat_id=user.id,
+                text=text,
+                reply_markup=reply_markup,
+                parse_mode=ParseMode.MARKDOWN
+            )
+            logger.info(f"📩 Risposta inviata in privato a {user.first_name} per comando /{deep_link_arg}")
+        except Exception:
+            # 3. Fallback se l'utente non ha mai avviato il bot privatamente
+            bot_info = await context.bot.get_me()
+            deep_link = f"https://t.me/{bot_info.username}?start={deep_link_arg}"
+            inline_kb = InlineKeyboardMarkup([
+                [InlineKeyboardButton("💬 Leggi in Privato", url=deep_link)]
+            ])
+            temp_msg = await context.bot.send_message(
+                chat_id=update.effective_chat.id,
+                text=f"👋 Ciao {user.mention_markdown_v2()}, per non intasare la chat del gruppo ti ho inviato le informazioni in privato! Clicca il tasto qui sotto per leggerle:",
+                reply_markup=inline_kb,
+                parse_mode=ParseMode.MARKDOWN
+            )
+            import asyncio
+            async def delete_temp():
+                await asyncio.sleep(15)
+                try:
+                    await temp_msg.delete()
+                except Exception:
+                    pass
+            asyncio.create_task(delete_temp())
+    else:
+        await msg.reply_text(text, reply_markup=reply_markup, parse_mode=ParseMode.MARKDOWN)
+
 
 async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Comando /start — info base."""
-    await update.message.reply_text(
-        "👋 Sono il bot di *Offerte Lavoro Bar Torino*!\n\n"
-        "Gestisco il gruppo automaticamente. Per aiuto: /help",
-        parse_mode=ParseMode.MARKDOWN,
+    """Comando /start — benvenuto e deep linking."""
+    user = update.effective_user
+    db.upsert_user(user.id, user.username or "", user.first_name or "", user.last_name or "")
+
+    # Deep linking per reindirizzamento da comandi del gruppo
+    if context.args:
+        arg = context.args[0].lower()
+        if arg == "evidenza":
+            await cmd_evidenza(update, context)
+            return
+        elif arg == "regole":
+            await cmd_regole(update, context)
+            return
+        elif arg == "registrati":
+            await cmd_registrati(update, context)
+            return
+        elif arg == "formato":
+            await cmd_formato(update, context)
+            return
+
+    welcome = config.WELCOME_MESSAGE.format(admin_username=config.ADMIN_USERNAME)
+    keyboard = ReplyKeyboardMarkup(
+        [[KeyboardButton("🍸 Compila / Modifica Profilo", web_app=WebAppInfo(url=config.WEBAPP_URL))]],
+        resize_keyboard=True
     )
+    await send_smart_reply(update, context, welcome, reply_markup=keyboard, deep_link_arg="start")
 
 
 async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -250,15 +327,20 @@ async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "/verify `@username` — Verifica locale/agenzia\n"
             "/featured `ID_messaggio` — Metti in evidenza post\n"
             "/regole — Mostra regole nel gruppo\n"
+            "/match `testo` — Analisi matching candidati\n"
         )
     else:
         text = (
             "ℹ️ *Offerte Lavoro Bar Torino*\n\n"
             "Pubblica annunci di lavoro nel settore bar & ristorazione a Torino.\n\n"
+            "/registrati — Crea il tuo profilo candidato Horeca\n"
+            "/profilo — Visualizza/modifica la tua scheda salvata\n"
             "/regole — Mostra le regole\n"
             "/formato — Mostra il formato consigliato\n"
             "/evidenza — Info su annunci in evidenza\n"
         )
+    await send_smart_reply(update, context, text, deep_link_arg="help")
+
     await update.message.reply_text(text, parse_mode=ParseMode.MARKDOWN)
 
 
@@ -383,7 +465,7 @@ async def cmd_regole(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "5️⃣ Rispetta gli altri membri\n\n"
         "Per info sugli annunci in evidenza: /evidenza"
     )
-    await update.message.reply_text(rules, parse_mode=ParseMode.MARKDOWN)
+    await send_smart_reply(update, context, rules, deep_link_arg="regole")
 
 
 async def cmd_formato(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -400,13 +482,14 @@ async def cmd_formato(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "```\n\n"
         "Più informazioni dai, più risposte ricevi! 💪"
     )
-    await update.message.reply_text(fmt, parse_mode=ParseMode.MARKDOWN)
+    await send_smart_reply(update, context, fmt, deep_link_arg="formato")
 
 
 async def cmd_evidenza(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Comando /evidenza — info monetizzazione."""
     msg = config.FEATURED_INFO.format(admin_username=config.ADMIN_USERNAME)
-    await update.message.reply_text(msg, parse_mode=ParseMode.MARKDOWN)
+    await send_smart_reply(update, context, msg, deep_link_arg="evidenza")
+
 
 
 async def cmd_match(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -490,15 +573,12 @@ async def cmd_registrati(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [[KeyboardButton("🍸 Apri Scheda Registrazione Profilo", web_app=WebAppInfo(url=config.WEBAPP_URL))]],
         resize_keyboard=True
     )
-    inline_keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("🍸 Compila Profilo Candidato", web_app=WebAppInfo(url=config.WEBAPP_URL))]
-    ])
     msg = (
         "💼 *REGISTRAZIONE PROFILO CANDIDATO*\n\n"
         "Crea o aggiorna la tua scheda profilo per ricevere offerte di lavoro su misura a Torino!\n\n"
         "Clicca sul pulsante in basso per aprire la scheda di registrazione:"
     )
-    await update.message.reply_text(msg, reply_markup=reply_keyboard, parse_mode=ParseMode.MARKDOWN)
+    await send_smart_reply(update, context, msg, reply_markup=reply_keyboard, deep_link_arg="registrati")
 
 
 async def cmd_profilo(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -511,12 +591,11 @@ async def cmd_profilo(update: Update, context: ContextTypes.DEFAULT_TYPE):
             [[KeyboardButton("📝 Crea Profilo Ora", web_app=WebAppInfo(url=config.WEBAPP_URL))]],
             resize_keyboard=True
         )
-        await update.message.reply_text(
+        msg_empty = (
             "❌ Non hai ancora registrato il tuo profilo candidato!\n\n"
-            "Clicca sul pulsante qui sotto per crearlo in 1 minuto:",
-            reply_markup=keyboard,
-            parse_mode=ParseMode.MARKDOWN
+            "Clicca sul pulsante qui sotto per crearlo in 1 minuto:"
         )
+        await send_smart_reply(update, context, msg_empty, reply_markup=keyboard, deep_link_arg="registrati")
         return
 
     roles = ", ".join(json.loads(profile["roles"])) if profile["roles"] else "Non specificato"
@@ -541,7 +620,8 @@ async def cmd_profilo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         resize_keyboard=True
     )
 
-    await update.message.reply_text(msg, reply_markup=keyboard, parse_mode=ParseMode.MARKDOWN)
+    await send_smart_reply(update, context, msg, reply_markup=keyboard, deep_link_arg="registrati")
+
 
 
 
