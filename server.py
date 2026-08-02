@@ -227,7 +227,7 @@ class WebAppHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
             self.end_headers()
             return
 
-        elif self.path == "/api/update_job_offer":
+        elif self.path.startswith("/api/update_job_offer"):
             content_length = int(self.headers.get('Content-Length', 0))
             post_data = self.rfile.read(content_length)
             try:
