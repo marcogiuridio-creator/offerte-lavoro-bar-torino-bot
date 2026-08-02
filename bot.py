@@ -15,7 +15,9 @@ from telegram import (
     KeyboardButton,
     WebAppInfo,
     LabeledPrice,
+    BotCommand,
 )
+
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -1214,6 +1216,20 @@ async def on_webapp_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 
+async def post_init(application: Application):
+    """Configura automaticamente il menu comandi nativo di Telegram con le relative icone."""
+    commands = [
+        BotCommand("registrati", "🍸 Registra / Modifica Profilo Candidato"),
+        BotCommand("profilo", "👤 Il Mio Profilo & Stato Premium"),
+        BotCommand("premium", "⭐ Passa a Premium (2,19€/mese)"),
+        BotCommand("pubblica", "📢 Pubblica Offerta Lavoro (Gratis / Evidenza)"),
+        BotCommand("regole", "📜 Regole del Gruppo"),
+        BotCommand("evidenza", "🔝 Info Post in Evidenza"),
+    ]
+    await application.bot.set_my_commands(commands)
+    logger.info("✅ Menu comandi nativo Telegram impostato con successo!")
+
+
 # ─── Main ──────────────────────────────────────────────────────────────────────────────
 
 def main():
@@ -1226,7 +1242,8 @@ def main():
     if not config.BOT_TOKEN:
         raise ValueError("❌ BOT_TOKEN mancante! Imposta la variabile d'ambiente BOT_TOKEN.")
 
-    app = Application.builder().token(config.BOT_TOKEN).build()
+    app = Application.builder().token(config.BOT_TOKEN).post_init(post_init).build()
+
 
     # Comandi
     app.add_handler(CommandHandler("start", cmd_start))
