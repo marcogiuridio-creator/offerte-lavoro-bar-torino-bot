@@ -8,7 +8,8 @@ BOT_TOKEN = os.getenv("BOT_TOKEN", "")
 GROUP_ID = int(os.getenv("GROUP_ID", "0"))          # ID numerico del gruppo (negativo)
 ADMIN_IDS = [int(x) for x in os.getenv("ADMIN_IDS", "21773014").split(",") if x]
 ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "marcogiuridio")
-WEBAPP_URL = os.getenv("WEBAPP_URL", "https://raw.githack.com/marcogiuridio-creator/offerte-lavoro-bar-torino-bot/main/webapp/index.html")
+WEBAPP_URL = os.getenv("WEBAPP_URL", "https://raw.githack.com/marcogiuridio-creator/offerte-lavoro-bar-torino-bot/main/webapp/index.html?v=20260802_3")
+
 
 # ─── Rate limiting ─────────────────────────────────────────────────────────────
 RATE_LIMIT_HOURS = int(os.getenv("RATE_LIMIT_HOURS", "6"))   # ore tra un post e l'altro
