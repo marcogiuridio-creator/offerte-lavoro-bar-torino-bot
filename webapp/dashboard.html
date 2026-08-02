@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Dashboard Candidature Locale - Horeca Torino</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+    :root {
+      --bg-color: var(--tg-theme-bg-color, #17212b);
+      --text-color: var(--tg-theme-text-color, #f5f5f5);
+      --hint-color: var(--tg-theme-hint-color, #708499);
+      --button-color: var(--tg-theme-button-color, #2481cc);
+      --secondary-bg: var(--tg-theme-secondary-bg-color, #232e3c);
+      --border-color: rgba(255, 255, 255, 0.08);
+      --gold-color: #fbc02d;
+      --green-color: #4caf50;
+      --red-color: #e53935;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+
+    body {
+      background-color: var(--bg-color);
+      color: var(--text-color);
+      padding: 16px;
+    }
+
+    .header {
+      text-align: center;
+      margin-bottom: 18px;
+    }
+
+    .header h1 {
+      font-size: 20px;
+      font-weight: 800;
+    }
+
+    .header p {
+      font-size: 13px;
+      color: var(--hint-color);
+      margin-top: 4px;
+    }
+
+    .cand-card {
+      background: var(--secondary-bg);
+      border: 1px solid var(--border-color);
+      border-radius: 14px;
+      padding: 14px;
+      margin-bottom: 12px;
+    }
+
+    .cand-card.is-premium {
+      border-color: var(--gold-color);
+      box-shadow: 0 2px 10px rgba(251, 192, 45, 0.15);
+    }
+
+    .cand-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+
+    .cand-name {
+      font-size: 16px;
+      font-weight: 700;
+    }
+
+    .badge-prem {
+      background: var(--gold-color);
+      color: #000;
+      font-size: 10px;
+      font-weight: 800;
+      padding: 2px 8px;
+      border-radius: 10px;
+    }
+
+    .cand-info {
+      font-size: 13px;
+      color: var(--hint-color);
+      line-height: 1.5;
+      margin-bottom: 10px;
+    }
+
+    .screening-box {
+      background: rgba(0, 0, 0, 0.2);
+      border-radius: 10px;
+      padding: 10px;
+      font-size: 12px;
+      margin-bottom: 12px;
+    }
+
+    .screening-box div {
+      margin-bottom: 4px;
+    }
+
+    .actions-grid {
+      display: flex;
+      gap: 8px;
+    }
+
+    .btn-action {
+      flex: 1;
+      border: none;
+      border-radius: 10px;
+      padding: 10px;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      color: #fff;
+    }
+
+    .btn-interview {
+      background: var(--green-color);
+    }
+
+    .btn-reject {
+      background: rgba(255, 255, 255, 0.1);
+      color: var(--hint-color);
+    }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <h1>📋 Dashboard Candidature</h1>
+    <p>Gestisci in tempo reale i candidati per il tuo locale (Stile Restworld)</p>
+  </div>
+
+  <div id="candidatesList">
+    <div class="cand-card is-premium">
+      <div class="cand-header">
+        <span class="cand-name">Marco Rossi (@marcorossi)</span>
+        <span class="badge-prem">⭐ PREMIUM</span>
+      </div>
+      <div class="cand-info">
+        💼 <b>Ruoli:</b> Barista, Bartender<br>
+        ⏳ <b>Esperienza:</b> 1-3 anni (Intermedio)<br>
+        📱 <b>Telefono:</b> +39 340 1234567<br>
+        🎯 <b>Affinità Match:</b> 88%
+      </div>
+      <div class="screening-box">
+        <div><b>Disponibilità:</b> ✅ Disponibile subito</div>
+        <div><b>HACCP / Requisiti:</b> 📜 HACCP Valido</div>
+      </div>
+      <div class="actions-grid">
+        <button class="btn-action btn-interview">✅ Convoca a Colloquio</button>
+        <button class="btn-action btn-reject">❌ Archivia</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const tg = window.Telegram ? window.Telegram.WebApp : null;
+    if (tg) {
+      tg.expand();
+      tg.ready();
+    }
+  </script>
+</body>
+</html>

@@ -194,9 +194,9 @@ def get_matching_candidates(job_text: str, min_score: int = 50) -> list:
     return matches
 
 
-async def notify_matched_candidates(bot, job_text: str, employer_username: str, group_msg_id: int):
+async def notify_matched_candidates(bot, job_text: str, employer_username: str, group_msg_id: int, job_id: int = None):
     """
-    Invia la notifica push in privato ai candidati idonei.
+    Invia la notifica push in privato ai candidati idonei con il tasto di candidatura 1-click.
     """
     matches = get_matching_candidates(job_text, min_score=60)
     if not matches:
@@ -217,19 +217,25 @@ async def notify_matched_candidates(bot, job_text: str, employer_username: str, 
         if not is_premium:
             continue
 
-        # Utente Premium: notifica completa con contatti diretti
         preview_text = job_text[:400] + ("..." if len(job_text) > 400 else "")
         msg = (
             f"⭐ *NUOVA OFFERTA IN TARGET (RISERVATA PREMIUM)* (Affinità: *{score}%*)\n\n"
             f"📝 *Annuncio:* \n_{preview_text}_\n\n"
-            f"👤 *Pubblicato da:* {contact_ref}\n"
-            f"💡 *Per candidarti:* scrivi subito in privato a {contact_ref} per riservarti il colloquio!"
+            f"👤 *Pubblicato da:* {contact_ref}\n\n"
+            f"💡 *Puoi scrivere subito in privato a {contact_ref} oppure candidarti in 1-Click col tasto qui sotto!*"
         )
+
+        reply_markup = None
+        if job_id:
+            reply_markup = InlineKeyboardMarkup([
+                [InlineKeyboardButton("📩 Candidati Ora in 1-Click", callback_data=f"apply_start:{job_id}")]
+            ])
 
         try:
             await bot.send_message(
                 chat_id=user_id,
                 text=msg,
+                reply_markup=reply_markup,
                 parse_mode="Markdown"
             )
             notified_count += 1
@@ -238,6 +244,7 @@ async def notify_matched_candidates(bot, job_text: str, employer_username: str, 
             logger.warning(f"Impossibile notificare utente {user_id}: {e}")
 
     return notified_count
+
 
 
 async def send_employer_candidates_report(bot, employer_user_id: int, job_text: str):

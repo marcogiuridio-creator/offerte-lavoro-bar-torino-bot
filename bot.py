@@ -729,6 +729,20 @@ async def successful_payment_callback(update: Update, context: ContextTypes.DEFA
             f"👤 *Pubblicato da:* @{user.username if user.username else user.first_name}"
         )
 
+        job_id = db.create_job_offer(
+            user_id=user.id,
+            username=user.username or "",
+            business_name=business,
+            role=role,
+            zone=zone,
+            shift=shift,
+            salary=salary,
+            description=desc,
+            contact=contact,
+            package=pkg,
+            is_verified=1
+        )
+
         msg_id = None
         if config.GROUP_ID != 0:
             try:
@@ -748,8 +762,8 @@ async def successful_payment_callback(update: Update, context: ContextTypes.DEFA
                     logger.warning(f"Impossibile fissare post in cima: {pe}")
 
                 import matcher
-                # 1. Notifica PUSH ai candidati Premium
-                await matcher.notify_matched_candidates(context.bot, post_text, user.username or "", pub_msg.message_id)
+                # 1. Notifica PUSH ai candidati Premium con tasto Candidati 1-Click
+                await matcher.notify_matched_candidates(context.bot, post_text, user.username or "", pub_msg.message_id, job_id=job_id)
 
                 # 2. Rapporto candidati (Premium in cima + Free) inviato in privato al datore di lavoro
                 await matcher.send_employer_candidates_report(context.bot, user.id, post_text)
@@ -763,6 +777,206 @@ async def successful_payment_callback(update: Update, context: ContextTypes.DEFA
             "🎉 *PAGAMENTO RICEVUTO CON SUCCESSO!*\n\n"
             "Il tuo annuncio in evidenza è stato pubblicato, **fissato in cima al gruppo** e notificato in privato ai candidati Premium!\n\n"
             "📋 *Ti abbiamo inviato qui sopra il Rapporto Completo dei Candidati compatibili a Torino (sia Premium che Free) con i loro contatti diretti!*",
+            parse_mode=ParseMode.MARKDOWN
+        )
+
+    # SE È UN ABBONAMENTO CANDIDATO PREMIUM (100 STELLE / 2,19€)
+    else:
+        new_date = db.make_user_premium(user.id, days=30)
+        logger.info(f"🎉 Pagamento completato da {user.first_name} ({user.id})! Premium attivo fino al {new_date}")
+
+        msg = (
+            f"🎉 *PAGAMENTO RICEVUTO CON SUCCESSO!*\n\n"
+            f"Il tuo account è stato aggiornato a *CANDIDATO PREMIUM* fino al *{new_date}*!\n\n"
+            f"✨ *Da ora sei attivo:* riceverai in tempo reale le notifiche push in privato con i contatti diretti (@username o numero di telefono) dei datori di lavoro di Torino appena pubblicano un'offerta!"
+        )
+        await update.message.reply_text(msg, parse_mode=ParseMode.MARKDOWN)
+
+
+# ─── Pre-Screening & Candidate Applications ───────────────────────────────────
+
+async def on_candidate_apply_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Inizia il flusso di Pre-screening quando il candidato clicca su 'Candidati Ora in 1-Click'."""
+    query = update.callback_query
+    await query.answer()
+    job_id = int(query.data.split(":")[1])
+
+    user = update.effective_user
+    profile = db.get_candidate_profile(user.id)
+    if not profile:
+        await query.message.reply_text(
+            "❌ Non hai ancora registrato il tuo profilo candidato!\n"
+            "Usa il comando `/registrati` per registrarlo in 1 minuto prima di candidarti.",
+            parse_mode=ParseMode.MARKDOWN
+        )
+        return
+
+    context.user_data[f"app_flow_{job_id}"] = {"job_id": job_id}
+
+    kb = InlineKeyboardMarkup([
+        [InlineKeyboardButton("✅ Sì, Disponibile Subito", callback_data=f"apply_q1:{job_id}:Disponibile")],
+        [InlineKeyboardButton("⚠️ Da Concordare col Titolare", callback_data=f"apply_q1:{job_id}:Da Concordare")]
+    ])
+
+    await query.message.reply_text(
+        "📝 *PRE-SCREENING CANDIDATURA (Passo 1 di 2)*\n\n"
+        "❓ *Confermi la tua disponibilità per la zona e gli orari indicati nell'annuncio?*",
+        reply_markup=kb,
+        parse_mode=ParseMode.MARKDOWN
+    )
+
+
+async def on_candidate_apply_q1(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Riceve la risposta alla Domanda 1 di Pre-screening."""
+    query = update.callback_query
+    await query.answer()
+    parts = query.data.split(":")
+    job_id = int(parts[1])
+    ans_q1 = parts[2]
+
+    flow = context.user_data.get(f"app_flow_{job_id}", {})
+    flow["q1"] = ans_q1
+    context.user_data[f"app_flow_{job_id}"] = flow
+
+    kb = InlineKeyboardMarkup([
+        [InlineKeyboardButton("📜 Sì, HACCP Valido / Requisiti OK", callback_data=f"apply_q2:{job_id}:HACCP OK")],
+        [InlineKeyboardButton("⏳ In Corso / Da Rinnovare", callback_data=f"apply_q2:{job_id}:HACCP Da Rinnovare")]
+    ])
+
+    await query.message.reply_text(
+        "📝 *PRE-SCREENING CANDIDATURA (Passo 2 di 2)*\n\n"
+        "❓ *Possiedi l'attestato HACCP e/o le certificazioni richieste per la ristorazione?*",
+        reply_markup=kb,
+        parse_mode=ParseMode.MARKDOWN
+    )
+
+
+async def on_candidate_apply_q2(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Riceve la risposta alla Domanda 2 di Pre-screening e chiede l'invio finale."""
+    query = update.callback_query
+    await query.answer()
+    parts = query.data.split(":")
+    job_id = int(parts[1])
+    ans_q2 = parts[2]
+
+    flow = context.user_data.get(f"app_flow_{job_id}", {})
+    flow["q2"] = ans_q2
+    context.user_data[f"app_flow_{job_id}"] = flow
+
+    kb = InlineKeyboardMarkup([
+        [InlineKeyboardButton("🚀 Invia Candidatura Ufficiale al Titolare", callback_data=f"apply_submit:{job_id}")]
+    ])
+
+    await query.message.reply_text(
+        "🎯 *PRE-SCREENING COMPLETATO!*\n\n"
+        "Clicca sul pulsante qui sotto per trasmettere la tua candidatura ufficiale direttamente al datore di lavoro del locale:",
+        reply_markup=kb,
+        parse_mode=ParseMode.MARKDOWN
+    )
+
+
+async def on_candidate_apply_submit(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Trasmette la candidatura completa con Scheda CV al datore di lavoro."""
+    query = update.callback_query
+    await query.answer()
+    job_id = int(query.data.split(":")[1])
+
+    user = update.effective_user
+    flow = context.user_data.pop(f"app_flow_{job_id}", {})
+    q1 = flow.get("q1", "Disponibile")
+    q2 = flow.get("q2", "HACCP OK")
+
+    profile = db.get_candidate_profile(user.id)
+    job = db.get_job_offer(job_id)
+
+    if not profile or not job:
+        await query.message.reply_text("❌ Si è verificato un errore con l'annuncio. Riprova più tardi.")
+        return
+
+    is_prem = db.is_user_premium(user.id)
+
+    import matcher
+    job_details = matcher.extract_job_details(job["description"] or "")
+    score = matcher.calculate_match_score(profile, job_details)
+
+    app_id = db.save_application(
+        job_id=job_id,
+        candidate_id=user.id,
+        candidate_user=user.username or user.first_name,
+        match_score=score,
+        screening_q1=q1,
+        screening_q2=q2,
+        screening_notes="Candidatura inoltrata via Pre-Screening Telegram Bot"
+    )
+
+    employer_user_id = job["user_id"]
+    status_badge = "⭐ CANDIDATO PREMIUM" if is_prem else "⚪ UTENTE BASE"
+
+    roles = ", ".join(json.loads(profile["roles"])) if profile["roles"] else "N/D"
+    skills = ", ".join(json.loads(profile["skills"])) if profile["skills"] else "N/D"
+
+    # SCHEDA CANDIDATO CV GENERATA PER IL TITOLARE
+    cv_card = (
+        f"🌟 *NUOVA CANDIDATURA INOLTRATA PER {job['business_name'].upper()}!*\n\n"
+        f"💼 *Ruolo Cercato:* {job['role']}\n"
+        f"👤 *Candidato:* {profile['first_name']} (@{profile['username'] or 'N/D'})\n"
+        f"🏷️ *Status:* {status_badge} (Affinità Match: *{score}%*)\n\n"
+        f"📋 *SCHEDA PROFILO & COMPETENZE:*\n"
+        f"• *Esperienza:* {profile['experience'] or 'N/D'}\n"
+        f"• *Ruoli:* {roles}\n"
+        f"• *Skill:* {skills}\n"
+        f"• *Telefono:* {profile['phone'] or 'Non fornito'}\n\n"
+        f"✅ *RISPOSTE PRE-SCREENING:*\n"
+        f"• Disponibilità Turni: *{q1}*\n"
+        f"• HACCP & Requisiti: *{q2}*"
+    )
+
+    btn_contact = InlineKeyboardButton("💬 Scrivi su Telegram", url=f"https://t.me/{profile['username']}") if profile['username'] else InlineKeyboardButton("📱 Chiama", url=f"tel:{profile['phone']}")
+
+    employer_kb = InlineKeyboardMarkup([
+        [
+            btn_contact,
+            InlineKeyboardButton("✅ Convoca a Colloquio", callback_data=f"app_status:{app_id}:interview")
+        ],
+        [InlineKeyboardButton("❌ Non Idoneo", callback_data=f"app_status:{app_id}:rejected")]
+    ])
+
+    try:
+        await context.bot.send_message(
+            chat_id=employer_user_id,
+            text=cv_card,
+            reply_markup=employer_kb,
+            parse_mode=ParseMode.MARKDOWN
+        )
+    except Exception as e:
+        logger.error(f"Errore invio candidatura a titolare {employer_user_id}: {e}")
+
+    await query.message.reply_text(
+        "🎉 *CANDIDATURA INVIATA CON SUCCESSO!*\n\n"
+        "La tua scheda profilo e le risposte del pre-screening sono state trasmesse direttamente al titolare del locale su Telegram!\n"
+        "Se il tuo profilo verrà selezionato, verrai contattato a breve per il colloquio.",
+        parse_mode=ParseMode.MARKDOWN
+    )
+
+
+async def on_employer_app_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Gestisce la decisione del titolare (Convoca a Colloquio / Rifiuta)."""
+    query = update.callback_query
+    await query.answer()
+    parts = query.data.split(":")
+    app_id = int(parts[1])
+    new_status = parts[2]
+
+    db.update_application_status(app_id, new_status)
+
+    if new_status == "interview":
+        await query.edit_message_text(
+            query.message.text + "\n\n🟢 *STATO: CANDIDATO CONVOCATO A COLLOQUIO*",
+            parse_mode=ParseMode.MARKDOWN
+        )
+    elif new_status == "rejected":
+        await query.edit_message_text(
+            query.message.text + "\n\n🔴 *STATO: CANDIDATURA ARCHIVIATA / NON IDONEA*",
             parse_mode=ParseMode.MARKDOWN
         )
 
@@ -954,7 +1168,6 @@ async def on_webapp_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     f"📞 *Contatto Candidature:* {contact}\n"
                     f"👤 *Pubblicato da:* @{user.username if user.username else user.first_name}"
                 )
-
                 if config.GROUP_ID != 0:
                     try:
                         pub_msg = await context.bot.send_message(
@@ -1051,9 +1264,17 @@ def main():
     app.add_handler(CallbackQueryHandler(on_link_approval, pattern="^link_"))
     app.add_handler(CallbackQueryHandler(on_payment_button, pattern="^pay_"))
 
+    # Candidature 1-Click e Pre-Screening (Stile Restworld)
+    app.add_handler(CallbackQueryHandler(on_candidate_apply_start, pattern="^apply_start:"))
+    app.add_handler(CallbackQueryHandler(on_candidate_apply_q1, pattern="^apply_q1:"))
+    app.add_handler(CallbackQueryHandler(on_candidate_apply_q2, pattern="^apply_q2:"))
+    app.add_handler(CallbackQueryHandler(on_candidate_apply_submit, pattern="^apply_submit:"))
+    app.add_handler(CallbackQueryHandler(on_employer_app_status, pattern="^app_status:"))
+
     # Gestione Pagamenti Telegram Stars & Stripe
     app.add_handler(PreCheckoutQueryHandler(precheckout_callback))
     app.add_handler(MessageHandler(filters.SUCCESSFUL_PAYMENT, successful_payment_callback))
+
 
     # Nuovi membri
     app.add_handler(ChatMemberHandler(on_new_member, ChatMemberHandler.CHAT_MEMBER))

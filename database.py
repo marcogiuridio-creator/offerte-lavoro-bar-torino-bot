@@ -69,13 +69,46 @@ def init_db():
             updated_at      TEXT DEFAULT (datetime('now')),
             FOREIGN KEY (user_id) REFERENCES users(user_id)
         );
+
+        CREATE TABLE IF NOT EXISTS job_offers (
+            job_id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id         INTEGER,
+            username        TEXT,
+            business_name   TEXT,
+            role            TEXT,
+            zone            TEXT,
+            shift           TEXT,
+            salary          TEXT,
+            description     TEXT,
+            contact         TEXT,
+            package         TEXT,
+            is_verified     INTEGER DEFAULT 0,
+            created_at      TEXT DEFAULT (datetime('now'))
+        );
+
+        CREATE TABLE IF NOT EXISTS applications (
+            app_id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            job_id          INTEGER,
+            candidate_id    INTEGER,
+            candidate_user  TEXT,
+            match_score     INTEGER,
+            screening_q1    TEXT,
+            screening_q2    TEXT,
+            screening_notes TEXT,
+            status          TEXT DEFAULT 'pending',
+            created_at      TEXT DEFAULT (datetime('now')),
+            FOREIGN KEY (job_id) REFERENCES job_offers(job_id),
+            FOREIGN KEY (candidate_id) REFERENCES candidate_profiles(user_id)
+        );
         """)
+
 
         # Migration colonna premium_until
         try:
             conn.execute("ALTER TABLE candidate_profiles ADD COLUMN premium_until TEXT")
         except Exception:
             pass
+
 
 
 
@@ -352,4 +385,73 @@ def is_user_premium(user_id: int) -> bool:
             pass
 
     return True
+
+
+# ─── Job Offers & Applications ────────────────────────────────────────────────
+
+def create_job_offer(
+    user_id: int,
+    username: str,
+    business_name: str,
+    role: str,
+    zone: str,
+    shift: str,
+    salary: str,
+    description: str,
+    contact: str,
+    package: str,
+    is_verified: int = 0
+) -> int:
+    """Inserisce una nuova offerta di lavoro e restituisce il job_id."""
+    with get_conn() as conn:
+        cursor = conn.execute("""
+            INSERT INTO job_offers (
+                user_id, username, business_name, role, zone, shift, salary, description, contact, package, is_verified
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (user_id, username, business_name, role, zone, shift, salary, description, contact, package, is_verified))
+        return cursor.lastrowid
+
+
+def get_job_offer(job_id: int):
+    """Recupera un annuncio dal database."""
+    with get_conn() as conn:
+        return conn.execute("SELECT * FROM job_offers WHERE job_id = ?", (job_id,)).fetchone()
+
+
+def save_application(
+    job_id: int,
+    candidate_id: int,
+    candidate_user: str,
+    match_score: int,
+    screening_q1: str,
+    screening_q2: str,
+    screening_notes: str
+) -> int:
+    """Salva la candidatura avanzata di un lavoratore."""
+    with get_conn() as conn:
+        cursor = conn.execute("""
+            INSERT INTO applications (
+                job_id, candidate_id, candidate_user, match_score, screening_q1, screening_q2, screening_notes
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (job_id, candidate_id, candidate_user, match_score, screening_q1, screening_q2, screening_notes))
+        return cursor.lastrowid
+
+
+def get_job_applications(job_id: int):
+    """Recupera tutte le candidature per uno specifico annuncio."""
+    with get_conn() as conn:
+        return conn.execute("""
+            SELECT a.*, c.first_name, c.roles, c.skills, c.experience, c.phone, c.is_premium
+            FROM applications a
+            LEFT JOIN candidate_profiles c ON a.candidate_id = c.user_id
+            WHERE a.job_id = ?
+            ORDER BY c.is_premium DESC, a.match_score DESC
+        """, (job_id,)).fetchall()
+
+
+def update_application_status(app_id: int, status: str):
+    """Aggiorna lo stato della candidatura (es. 'interview', 'rejected', 'hired')."""
+    with get_conn() as conn:
+        conn.execute("UPDATE applications SET status = ? WHERE app_id = ?", (status, app_id))
+
 
