@@ -13,5 +13,35 @@
     "package": "vip",
     "is_verified": 1,
     "message_id": 36159
+  },
+  {
+    "job_id": 2,
+    "user_id": 356464630,
+    "username": "cinziaciervo",
+    "business_name": "BAR CAFFETTERIA CENTRO",
+    "role": "Barista",
+    "zone": "Centro",
+    "shift": "Full-time",
+    "salary": "Trattabile",
+    "description": "Cercasi barista con esperienza per bar caffetteria in centro a Torino",
+    "contact": "@cinziaciervo",
+    "package": "free",
+    "is_verified": 1,
+    "message_id": null
+  },
+  {
+    "job_id": 3,
+    "user_id": 415606576,
+    "username": "cinziaciervo",
+    "business_name": "BAR CAFFETTERIA CENTRO",
+    "role": "Barista",
+    "zone": "Centro",
+    "shift": "Full-time",
+    "salary": "Trattabile",
+    "description": "Cercasi barista con esperienza per bar caffetteria in centro a Torino",
+    "contact": "@cinziaciervo",
+    "package": "free",
+    "is_verified": 1,
+    "message_id": null
   }
 ]
