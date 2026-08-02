@@ -57,8 +57,15 @@ class WebAppHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
                         }
                         candidates_res.append(cand_obj)
 
-                    # Ordina con PREMIUM IN CIMA
-                    candidates_res.sort(key=lambda x: (not x["is_premium"], -x["match_score"]))
+                    # Priorità ordinamento:
+                    # 1. Candidati che si sono CANDIDATI attivamente via Pre-screening (Prima Premium ⭐, poi Free ⚪)
+                    # 2. Altri candidati registrati in target nel DB (Prima Premium ⭐, poi Free ⚪)
+                    candidates_res.sort(key=lambda x: (
+                        x["application_status"] == "nessuna",
+                        not x["is_premium"],
+                        -x["match_score"]
+                    ))
+
 
                 self.send_response(200)
                 self.send_header('Content-Type', 'application/json')
