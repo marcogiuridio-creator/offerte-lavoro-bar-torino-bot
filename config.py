@@ -10,9 +10,18 @@ ADMIN_IDS = [int(x) for x in os.getenv("ADMIN_IDS", "21773014").split(",") if x]
 ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "marcogiuridio o @banu80")
 
 STRIPE_PROVIDER_TOKEN = os.getenv("STRIPE_PROVIDER_TOKEN", "")
-WEBAPP_URL = os.getenv("WEBAPP_URL", "https://raw.githack.com/marcogiuridio-creator/offerte-lavoro-bar-torino-bot/main/webapp/index.html?v=20260802_3")
-WEBAPP_PUBBLICA_URL = os.getenv("WEBAPP_PUBBLICA_URL", "https://raw.githack.com/marcogiuridio-creator/offerte-lavoro-bar-torino-bot/main/webapp/pubblica.html?v=20260802_1")
-WEBAPP_DASHBOARD_URL = os.getenv("WEBAPP_DASHBOARD_URL", "https://raw.githack.com/marcogiuridio-creator/offerte-lavoro-bar-torino-bot/main/webapp/dashboard.html?v=20260802_1")
+RAILWAY_DOMAIN = os.getenv("RAILWAY_PUBLIC_DOMAIN", os.getenv("RAILWAY_STATIC_URL", ""))
+if RAILWAY_DOMAIN:
+    if not RAILWAY_DOMAIN.startswith("http"):
+        RAILWAY_DOMAIN = f"https://{RAILWAY_DOMAIN}"
+    BASE_WEB_URL = RAILWAY_DOMAIN
+else:
+    BASE_WEB_URL = os.getenv("BASE_WEBAPP_URL", "https://marcogiuridio-creator.github.io/offerte-lavoro-bar-torino-bot")
+
+WEBAPP_URL = os.getenv("WEBAPP_URL", f"{BASE_WEB_URL}/webapp/index.html?v=20260802_4")
+WEBAPP_PUBBLICA_URL = os.getenv("WEBAPP_PUBBLICA_URL", f"{BASE_WEB_URL}/webapp/pubblica.html?v=20260802_4")
+WEBAPP_DASHBOARD_URL = os.getenv("WEBAPP_DASHBOARD_URL", f"{BASE_WEB_URL}/webapp/dashboard.html?v=20260802_4")
+
 
 
 
