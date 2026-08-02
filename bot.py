@@ -580,17 +580,21 @@ async def on_link_approval(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ─── WebApp & Profilo Candidato ─────────────────────────────────────────────
 
 async def cmd_registrati(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Comando /registrati — apre la Telegram WebApp per registrare il profilo candidato."""
+    """Comando /registrati — apre la Telegram WebApp per registrare o modificare il profilo candidato."""
+    user = update.effective_user
+    webapp_user_url = f"{config.WEBAPP_URL}&user_id={user.id}" if "?" in config.WEBAPP_URL else f"{config.WEBAPP_URL}?user_id={user.id}"
+
     reply_keyboard = ReplyKeyboardMarkup(
-        [[KeyboardButton("🍸 Apri Scheda Registrazione Profilo", web_app=WebAppInfo(url=config.WEBAPP_URL))]],
+        [[KeyboardButton("🍸 Apri Scheda Profilo & Skill", web_app=WebAppInfo(url=webapp_user_url))]],
         resize_keyboard=True
     )
     msg = (
-        "💼 *REGISTRAZIONE PROFILO CANDIDATO*\n\n"
-        "Crea o aggiorna la tua scheda profilo per ricevere offerte di lavoro su misura a Torino!\n\n"
-        "Clicca sul pulsante in basso per aprire la scheda di registrazione:"
+        "💼 *REGISTRAZIONE & MODIFICA PROFILO CANDIDATO*\n\n"
+        "Crea o modifica la tua scheda profilo e aggiungi/rimuovi le tue skill Horeca su misura per Torino!\n\n"
+        "Clicca sul pulsante in basso per aprire la scheda:"
     )
     await send_smart_reply(update, context, msg, reply_markup=reply_keyboard, deep_link_arg="registrati")
+
 
 
 async def cmd_premium(update: Update, context: ContextTypes.DEFAULT_TYPE):
