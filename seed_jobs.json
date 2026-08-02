@@ -3,30 +3,15 @@
     "job_id": 1,
     "user_id": 307812499,
     "username": "mallybio",
-    "business_name": "CAFFÈ BORELLO",
+    "business_name": "CAFFÈ CENTRO",
     "role": "Barista",
     "zone": "Centro",
     "shift": "Full-time",
     "salary": "Da definire",
-    "description": "Barista capace referenziato per locale in centro a Torino",
+    "description": "Barista capace referenziato",
     "contact": "3341202939",
     "package": "vip",
     "is_verified": 1,
     "message_id": 36159
-  },
-  {
-    "job_id": 2,
-    "user_id": 888801,
-    "username": "titolare_caffetorino",
-    "business_name": "CAFFÈ TORINO CENTRO",
-    "role": "Barista",
-    "zone": "Centro",
-    "shift": "Full-time",
-    "salary": "1.300€ / mese",
-    "description": "Cercasi barista esperto per gestione banco e caffetteria mattina in piazza Castello. Richiesto attestato HACCP ed esperienza espresso.",
-    "contact": "@titolare_caffetorino",
-    "package": "evidenza",
-    "is_verified": 1,
-    "message_id": null
   }
 ]
