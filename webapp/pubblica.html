@@ -470,17 +470,29 @@
     let editingJobId = null;
 
     async function loadExistingJobOffer() {
-      const urlParams = new URLSearchParams(window.location.search);
-      editingJobId = urlParams.get('edit_job_id') || urlParams.get('job_id');
+      const fullUrl = window.location.href;
+      const match = fullUrl.match(/[?&](?:edit_job_id|job_id)=(\d+)/);
+      if (match) {
+        editingJobId = match[1];
+      }
 
-      if (!editingJobId) return;
+      const userMatch = fullUrl.match(/[?&]user_id=(\d+)/);
+      let passedUserId = userMatch ? userMatch[1] : '';
+
+      if (!passedUserId && window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initDataUnsafe && window.Telegram.WebApp.initDataUnsafe.user) {
+        passedUserId = window.Telegram.WebApp.initDataUnsafe.user.id;
+      }
+
+      if (!editingJobId && !passedUserId) return;
 
       try {
-        const resp = await fetch(`/api/get_job_offer?job_id=${editingJobId}`);
+        const resp = await fetch(`/api/get_job_offer?job_id=${editingJobId || 0}&user_id=${passedUserId || 0}`);
         const data = await resp.json();
 
         if (data.status === 'ok' && data.job) {
           const j = data.job;
+          editingJobId = j.job_id; // Imposta il job_id vero restituito dal server!
+
           document.querySelector('.header h1').innerText = "✏️ Modifica Offerta Lavoro";
           document.querySelector('.header p').innerText = "Aggiorna i dettagli del tuo annuncio in tempo reale";
           document.getElementById('submitBtn').innerText = "💾 SALVA MODIFICHE ANNUNCIO";

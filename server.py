@@ -68,8 +68,17 @@ class WebAppHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
                 parsed = urllib.parse.urlparse(self.path)
                 params = urllib.parse.parse_qs(parsed.query)
                 job_id = int(params.get("job_id", [0])[0])
+                user_id = int(params.get("user_id", [0])[0])
 
-                job = db.get_job_offer(job_id)
+                job = None
+                if job_id > 0:
+                    job = db.get_job_offer(job_id)
+
+                if not job and user_id > 0:
+                    user_jobs = db.get_user_job_offers(user_id)
+                    if user_jobs:
+                        job = user_jobs[0]
+
                 if job:
                     res = {
                         "status": "ok",
