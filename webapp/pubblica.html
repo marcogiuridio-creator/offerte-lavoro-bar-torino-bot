@@ -349,6 +349,10 @@
 
   <script>
     const tg = window.Telegram ? window.Telegram.WebApp : null;
+    const API_BASE_URL = window.location.hostname.includes('github.io')
+      ? 'https://offerte-lavoro-bar-torino-bot.up.railway.app'
+      : '';
+
     if (tg) {
       tg.expand();
       tg.ready();
@@ -427,7 +431,7 @@
 
       if (editingJobId) {
         try {
-          const resp = await fetch('/api/update_job_offer', {
+          const resp = await fetch(`${API_BASE_URL}/api/update_job_offer`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
@@ -479,7 +483,7 @@
       if (!editingJobId) return;
 
       try {
-        const resp = await fetch(`/api/get_job_offer?job_id=${editingJobId}`);
+        const resp = await fetch(`${API_BASE_URL}/api/get_job_offer?job_id=${editingJobId}`);
         const data = await resp.json();
 
         if (data.status === 'ok' && data.job) {
