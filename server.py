@@ -3,11 +3,15 @@ import http.server
 import socketserver
 import threading
 import logging
-
 import json
+import urllib.request
+import urllib.parse
+
+import config
 import database as db
 
 logger = logging.getLogger(__name__)
+
 
 BOT_DIR = os.path.dirname(__file__)
 
