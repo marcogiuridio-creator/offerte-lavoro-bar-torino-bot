@@ -11,7 +11,8 @@
     "description": "Barista capace referenziato per locale in centro a Torino",
     "contact": "3341202939",
     "package": "vip",
-    "is_verified": 1
+    "is_verified": 1,
+    "message_id": 36159
   },
   {
     "job_id": 2,
@@ -25,6 +26,7 @@
     "description": "Cercasi barista esperto per gestione banco e caffetteria mattina in piazza Castello. Richiesto attestato HACCP ed esperienza espresso.",
     "contact": "@titolare_caffetorino",
     "package": "evidenza",
-    "is_verified": 1
+    "is_verified": 1,
+    "message_id": null
   }
 ]

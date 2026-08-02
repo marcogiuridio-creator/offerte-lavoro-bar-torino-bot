@@ -256,41 +256,41 @@ class WebAppHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
                             import asyncio
                             async def update_tg_msg():
                                 try:
-                                    bot = Bot(token=config.BOT_TOKEN)
-                                    msg_id = job.get("message_id")
+                                    async with Bot(token=config.BOT_TOKEN) as bot:
+                                        msg_id = job.get("message_id")
 
-                                    # Se message_id è nullo nel DB, tenta il recupero del messaggio pinnato nel gruppo
-                                    if not msg_id:
-                                        try:
-                                            chat = await bot.get_chat(chat_id=config.GROUP_ID)
-                                            if chat.pinned_message:
-                                                msg_id = chat.pinned_message.message_id
-                                                db.update_job_offer_message_id(job_id, msg_id)
-                                        except Exception as e_pin:
-                                            logger.warning(f"Impossibile recuperare messaggio pinnato: {e_pin}")
+                                        # Se message_id è nullo nel DB, tenta il recupero del messaggio pinnato nel gruppo
+                                        if not msg_id:
+                                            try:
+                                                chat = await bot.get_chat(chat_id=config.GROUP_ID)
+                                                if chat.pinned_message:
+                                                    msg_id = chat.pinned_message.message_id
+                                                    db.update_job_offer_message_id(job_id, msg_id)
+                                            except Exception as e_pin:
+                                                logger.warning(f"Impossibile recuperare messaggio pinnato: {e_pin}")
 
-                                    if msg_id:
-                                        pkg = job["package"]
-                                        header = "📢 *OFFERTA DI LAVORO*" if pkg == "free" else ("🔝 *OFFERTA IN EVIDENZA (SPONSOR 24H)* 🔝" if pkg == "evidenza" else "👑 *SPONSOR VIP (7 GIORNI IN CIMA)* 👑")
-                                        updated_text = (
-                                            f"{header}\n\n"
-                                            f"🏪 *LOCALE:* {job['business_name'].upper()}\n"
-                                            f"💼 *Ruolo Cercato:* {job['role']}\n"
-                                            f"📍 *Zona:* {job['zone']}\n"
-                                            f"⏰ *Turni:* {job['shift']}\n"
-                                            f"💰 *Paga:* {job['salary'] if job['salary'] else 'Trattabile'}\n\n"
-                                            f"📝 *Descrizione & Requisiti:*\n_{job['description']}_\n\n"
-                                            f"📞 *Contatto Candidature:* {job['contact']}\n"
-                                            f"👤 *Pubblicato da:* @{job['username'] if job['username'] else 'Datore'}\n"
-                                            f"✏️ _(Annuncio Aggiornato dal Datore)_"
-                                        )
-                                        await bot.edit_message_text(
-                                            chat_id=config.GROUP_ID,
-                                            message_id=msg_id,
-                                            text=updated_text,
-                                            parse_mode=ParseMode.MARKDOWN
-                                        )
-                                        logger.info(f"✅ Messaggio Telegram #{msg_id} modificato nel gruppo per job #{job_id}")
+                                        if msg_id:
+                                            pkg = job["package"]
+                                            header = "📢 *OFFERTA DI LAVORO*" if pkg == "free" else ("🔝 *OFFERTA IN EVIDENZA (SPONSOR 24H)* 🔝" if pkg == "evidenza" else "👑 *SPONSOR VIP (7 GIORNI IN CIMA)* 👑")
+                                            updated_text = (
+                                                f"{header}\n\n"
+                                                f"🏪 *LOCALE:* {job['business_name'].upper()}\n"
+                                                f"💼 *Ruolo Cercato:* {job['role']}\n"
+                                                f"📍 *Zona:* {job['zone']}\n"
+                                                f"⏰ *Turni:* {job['shift']}\n"
+                                                f"💰 *Paga:* {job['salary'] if job['salary'] else 'Trattabile'}\n\n"
+                                                f"📝 *Descrizione & Requisiti:*\n_{job['description']}_\n\n"
+                                                f"📞 *Contatto Candidature:* {job['contact']}\n"
+                                                f"👤 *Pubblicato da:* @{job['username'] if job['username'] else 'Datore'}\n"
+                                                f"✏️ _(Annuncio Aggiornato dal Datore)_"
+                                            )
+                                            await bot.edit_message_text(
+                                                chat_id=config.GROUP_ID,
+                                                message_id=msg_id,
+                                                text=updated_text,
+                                                parse_mode=ParseMode.MARKDOWN
+                                            )
+                                            logger.info(f"✅ Messaggio Telegram #{msg_id} modificato nel gruppo per job #{job_id}")
                                 except Exception as e_tg:
                                     logger.warning(f"Impossibile aggiornare messaggio Telegram per job #{job_id}: {e_tg}")
 
