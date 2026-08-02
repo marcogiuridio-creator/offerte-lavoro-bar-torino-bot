@@ -247,77 +247,77 @@ class WebAppHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
                     )
                     logger.info(f"✅ Annuncio #{job_id} aggiornato via API")
 
-                    # Se presente o recuperabile un message_id nel gruppo, aggiorna anche il testo nel gruppo Telegram!
+                    # Sincronizza immediatamente il messaggio nel gruppo Telegram via HTTP Direct Request (Zero Asyncio Overhead)
                     job = db.get_job_offer(job_id)
-                    if job:
-                        import config
-                        from telegram import Bot
-                        from telegram.constants import ParseMode
-                        if config.BOT_TOKEN and config.GROUP_ID != 0:
-                            import asyncio
-                            async def update_tg_msg():
+                    if job and config.BOT_TOKEN and config.GROUP_ID != 0:
+                        msg_id = job["message_id"] if "message_id" in job.keys() else None
+                        
+                        # Se message_id non è ancora salvato nel DB per questo annuncio, tenta di recuperare l'ID del messaggio pinnato
+                        if not msg_id:
+                            try:
+                                get_pin_url = f"https://api.telegram.org/bot{config.BOT_TOKEN}/getChat?chat_id={config.GROUP_ID}"
+                                with urllib.request.urlopen(get_pin_url) as p_resp:
+                                    chat_data = json.loads(p_resp.read().decode('utf-8'))
+                                    if chat_data.get("ok") and "pinned_message" in chat_data["result"]:
+                                        msg_id = chat_data["result"]["pinned_message"]["message_id"]
+                                        db.update_job_offer_message_id(job_id, msg_id)
+                            except Exception as e_p:
+                                logger.warning(f"Impossibile recuperare pinned_message via HTTP: {e_p}")
+
+                        if msg_id:
+                            pkg = job["package"]
+                            header = "📢 *OFFERTA DI LAVORO*" if pkg == "free" else ("🔝 *OFFERTA IN EVIDENZA (SPONSOR 24H)* 🔝" if pkg == "evidenza" else "👑 *SPONSOR VIP (7 GIORNI IN CIMA)* 👑")
+                            updated_text = (
+                                f"{header}\n\n"
+                                f"🏪 *LOCALE:* {job['business_name'].upper()}\n"
+                                f"💼 *Ruolo Cercato:* {job['role']}\n"
+                                f"📍 *Zona:* {job['zone']}\n"
+                                f"⏰ *Turni:* {job['shift']}\n"
+                                f"💰 *Paga:* {job['salary'] if job['salary'] else 'Trattabile'}\n\n"
+                                f"📝 *Descrizione & Requisiti:*\n_{job['description']}_\n\n"
+                                f"📞 *Contatto Candidature:* {job['contact']}\n"
+                                f"👤 *Pubblicato da:* @{job['username'] if job['username'] else 'Datore'}\n"
+                                f"✏️ _(Annuncio Aggiornato dal Datore)_"
+                            )
+
+                            edit_url = f"https://api.telegram.org/bot{config.BOT_TOKEN}/editMessageText"
+                            payload_md = {
+                                "chat_id": config.GROUP_ID,
+                                "message_id": msg_id,
+                                "text": updated_text,
+                                "parse_mode": "Markdown"
+                            }
+                            req_md = urllib.request.Request(edit_url, data=json.dumps(payload_md).encode('utf-8'), headers={'Content-Type': 'application/json'})
+                            try:
+                                with urllib.request.urlopen(req_md) as resp_md:
+                                    logger.info(f"✅ Messaggio Telegram #{msg_id} modificato con successo nel gruppo per job #{job_id}")
+                            except Exception as e_md:
+                                logger.warning(f"Fallback Markdown fallito per job #{job_id}: {e_md}. Invio in Plain Text...")
+                                plain_header = "📢 OFFERTA DI LAVORO" if pkg == "free" else ("🔝 OFFERTA IN EVIDENZA (SPONSOR 24H) 🔝" if pkg == "evidenza" else "👑 SPONSOR VIP (7 GIORNI IN CIMA) 👑")
+                                plain_text = (
+                                    f"{plain_header}\n\n"
+                                    f"LOCALE: {job['business_name'].upper()}\n"
+                                    f"Ruolo Cercato: {job['role']}\n"
+                                    f"Zona: {job['zone']}\n"
+                                    f"Turni: {job['shift']}\n"
+                                    f"Paga: {job['salary'] if job['salary'] else 'Trattabile'}\n\n"
+                                    f"Descrizione & Requisiti:\n{job['description']}\n\n"
+                                    f"Contatto Candidature: {job['contact']}\n"
+                                    f"Pubblicato da: @{job['username'] if job['username'] else 'Datore'}\n"
+                                    f"(Annuncio Aggiornato dal Datore)"
+                                )
+                                payload_plain = {
+                                    "chat_id": config.GROUP_ID,
+                                    "message_id": msg_id,
+                                    "text": plain_text
+                                }
+                                req_plain = urllib.request.Request(edit_url, data=json.dumps(payload_plain).encode('utf-8'), headers={'Content-Type': 'application/json'})
                                 try:
-                                    async with Bot(token=config.BOT_TOKEN) as bot:
-                                        msg_id = job.get("message_id")
+                                    with urllib.request.urlopen(req_plain) as resp_plain:
+                                        logger.info(f"✅ Messaggio Telegram #{msg_id} modificato in Plain Text per job #{job_id}")
+                                except Exception as e_plain:
+                                    logger.error(f"❌ Impossibile aggiornare messaggio #{msg_id} in Plain Text: {e_plain}")
 
-                                        # Se message_id è nullo nel DB, tenta il recupero del messaggio pinnato nel gruppo
-                                        if not msg_id:
-                                            try:
-                                                chat = await bot.get_chat(chat_id=config.GROUP_ID)
-                                                if chat.pinned_message:
-                                                    msg_id = chat.pinned_message.message_id
-                                                    db.update_job_offer_message_id(job_id, msg_id)
-                                            except Exception as e_pin:
-                                                logger.warning(f"Impossibile recuperare messaggio pinnato: {e_pin}")
-
-                                        if msg_id:
-                                            pkg = job["package"]
-                                            header = "📢 *OFFERTA DI LAVORO*" if pkg == "free" else ("🔝 *OFFERTA IN EVIDENZA (SPONSOR 24H)* 🔝" if pkg == "evidenza" else "👑 *SPONSOR VIP (7 GIORNI IN CIMA)* 👑")
-                                            updated_text = (
-                                                f"{header}\n\n"
-                                                f"🏪 *LOCALE:* {job['business_name'].upper()}\n"
-                                                f"💼 *Ruolo Cercato:* {job['role']}\n"
-                                                f"📍 *Zona:* {job['zone']}\n"
-                                                f"⏰ *Turni:* {job['shift']}\n"
-                                                f"💰 *Paga:* {job['salary'] if job['salary'] else 'Trattabile'}\n\n"
-                                                f"📝 *Descrizione & Requisiti:*\n_{job['description']}_\n\n"
-                                                f"📞 *Contatto Candidature:* {job['contact']}\n"
-                                                f"👤 *Pubblicato da:* @{job['username'] if job['username'] else 'Datore'}\n"
-                                                f"✏️ _(Annuncio Aggiornato dal Datore)_"
-                                            )
-                                            try:
-                                                await bot.edit_message_text(
-                                                    chat_id=config.GROUP_ID,
-                                                    message_id=msg_id,
-                                                    text=updated_text,
-                                                    parse_mode=ParseMode.MARKDOWN
-                                                )
-                                                logger.info(f"✅ Messaggio Telegram #{msg_id} modificato con successo nel gruppo per job #{job_id}")
-                                            except Exception as e_md:
-                                                logger.warning(f"Fallback Markdown fallito per job #{job_id}: {e_md}. Invio in formato testo semplice...")
-                                                plain_header = "📢 OFFERTA DI LAVORO" if pkg == "free" else ("🔝 OFFERTA IN EVIDENZA (SPONSOR 24H) 🔝" if pkg == "evidenza" else "👑 SPONSOR VIP (7 GIORNI IN CIMA) 👑")
-                                                plain_text = (
-                                                    f"{plain_header}\n\n"
-                                                    f"LOCALE: {job['business_name'].upper()}\n"
-                                                    f"Ruolo Cercato: {job['role']}\n"
-                                                    f"Zona: {job['zone']}\n"
-                                                    f"Turni: {job['shift']}\n"
-                                                    f"Paga: {job['salary'] if job['salary'] else 'Trattabile'}\n\n"
-                                                    f"Descrizione & Requisiti:\n{job['description']}\n\n"
-                                                    f"Contatto Candidature: {job['contact']}\n"
-                                                    f"Pubblicato da: @{job['username'] if job['username'] else 'Datore'}\n"
-                                                    f"(Annuncio Aggiornato dal Datore)"
-                                                )
-                                                await bot.edit_message_text(
-                                                    chat_id=config.GROUP_ID,
-                                                    message_id=msg_id,
-                                                    text=plain_text
-                                                )
-                                                logger.info(f"✅ Messaggio Telegram #{msg_id} modificato in formato testo semplice per job #{job_id}")
-                                except Exception as e_tg:
-                                    logger.warning(f"Impossibile aggiornare messaggio Telegram per job #{job_id}: {e_tg}")
-
-                            asyncio.run(update_tg_msg())
 
                     self.send_response(200)
                     self.send_header('Content-Type', 'application/json')
