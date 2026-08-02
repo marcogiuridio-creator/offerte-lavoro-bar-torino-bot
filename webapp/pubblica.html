@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Pubblica Offerta Lavoro Horeca Torino</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+    :root {
+      --bg-color: var(--tg-theme-bg-color, #17212b);
+      --text-color: var(--tg-theme-text-color, #f5f5f5);
+      --hint-color: var(--tg-theme-hint-color, #708499);
+      --button-color: var(--tg-theme-button-color, #2481cc);
+      --button-text: var(--tg-theme-button-text-color, #ffffff);
+      --secondary-bg: var(--tg-theme-secondary-bg-color, #232e3c);
+      --border-color: rgba(255, 255, 255, 0.08);
+      --gold-color: #fbc02d;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      background-color: var(--bg-color);
+      color: var(--text-color);
+      padding: 16px;
+      padding-bottom: 110px;
+    }
+
+    .header {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+
+    .header-icon {
+      font-size: 44px;
+      margin-bottom: 6px;
+    }
+
+    .header h1 {
+      font-size: 22px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+    }
+
+    .header p {
+      font-size: 13px;
+      color: var(--hint-color);
+      margin-top: 4px;
+      line-height: 1.4;
+    }
+
+    .section {
+      background: var(--secondary-bg);
+      border-radius: 16px;
+      padding: 18px;
+      margin-bottom: 18px;
+      border: 1px solid var(--border-color);
+    }
+
+    .section-title {
+      font-size: 15px;
+      font-weight: 700;
+      margin-bottom: 14px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--text-color);
+    }
+
+    /* PACCHETTI PROMO */
+    .pkg-card {
+      background: rgba(0, 0, 0, 0.2);
+      border: 2px solid var(--border-color);
+      border-radius: 14px;
+      padding: 14px;
+      margin-bottom: 12px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      position: relative;
+    }
+
+    .pkg-card.selected {
+      border-color: var(--button-color);
+      background: rgba(36, 129, 204, 0.12);
+      box-shadow: 0 4px 15px rgba(36, 129, 204, 0.25);
+    }
+
+    .pkg-card.selected.pkg-evidenza {
+      border-color: var(--gold-color);
+      background: rgba(251, 192, 45, 0.12);
+      box-shadow: 0 4px 15px rgba(251, 192, 45, 0.25);
+    }
+
+    .pkg-card.selected.pkg-vip {
+      border-color: #e53935;
+      background: rgba(229, 57, 53, 0.12);
+      box-shadow: 0 4px 15px rgba(229, 57, 53, 0.25);
+    }
+
+    .pkg-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 6px;
+    }
+
+    .pkg-title {
+      font-size: 15px;
+      font-weight: 700;
+    }
+
+    .pkg-price {
+      font-size: 14px;
+      font-weight: 800;
+      background: rgba(255, 255, 255, 0.1);
+      padding: 4px 10px;
+      border-radius: 12px;
+    }
+
+    .pkg-desc {
+      font-size: 12px;
+      color: var(--hint-color);
+      line-height: 1.4;
+    }
+
+    .badge-pop {
+      position: absolute;
+      top: -10px;
+      right: 14px;
+      background: var(--gold-color);
+      color: #000;
+      font-size: 10px;
+      font-weight: 800;
+      padding: 2px 8px;
+      border-radius: 10px;
+      text-transform: uppercase;
+    }
+
+    .pills-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .pill {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border-color);
+      border-radius: 20px;
+      padding: 8px 14px;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-color);
+      cursor: pointer;
+      transition: all 0.15s ease;
+      user-select: none;
+    }
+
+    .pill.selected {
+      background: var(--button-color);
+      color: var(--button-text);
+      border-color: var(--button-color);
+    }
+
+    .input-group {
+      margin-bottom: 14px;
+    }
+
+    .input-group:last-child {
+      margin-bottom: 0;
+    }
+
+    label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--hint-color);
+      margin-bottom: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    input, textarea, select {
+      width: 100%;
+      background: rgba(0, 0, 0, 0.25);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 12px;
+      font-size: 14px;
+      color: var(--text-color);
+      outline: none;
+    }
+
+    input:focus, textarea:focus, select:focus {
+      border-color: var(--button-color);
+    }
+
+    textarea {
+      resize: none;
+      height: 80px;
+    }
+
+    .footer-btn-container {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: var(--bg-color);
+      padding: 14px 16px;
+      border-top: 1px solid var(--border-color);
+      z-index: 100;
+    }
+
+    .btn-submit {
+      width: 100%;
+      background: var(--button-color);
+      color: var(--button-text);
+      border: none;
+      border-radius: 14px;
+      padding: 15px;
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+      box-shadow: 0 4px 15px rgba(36, 129, 204, 0.4);
+    }
+
+    .btn-submit:active {
+      opacity: 0.85;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <div class="header-icon">📢</div>
+    <h1>Pubblica Offerta Lavoro</h1>
+    <p>Trova personale qualificato a Torino per il tuo locale in poche ore</p>
+  </div>
+
+  <form id="jobForm">
+
+    <!-- SCELTA PACCHETTO VISIBILITÀ -->
+    <div class="section">
+      <div class="section-title">🚀 Scegli il Livello di Visibilità</div>
+
+      <div class="pkg-card selected" data-pkg="free">
+        <div class="pkg-header">
+          <span class="pkg-title">🆓 Annuncio Gratuito</span>
+          <span class="pkg-price">0 €</span>
+        </div>
+        <div class="pkg-desc">Pubblicazione standard nel gruppo per 9.000+ membri Horeca Torino.</div>
+      </div>
+
+      <div class="pkg-card pkg-evidenza" data-pkg="evidenza">
+        <div class="badge-pop">Consigliato 🌟</div>
+        <div class="pkg-header">
+          <span class="pkg-title">⭐ In Evidenza 24 Ore</span>
+          <span class="pkg-price">250 Stelle (5,39 €)</span>
+        </div>
+        <div class="pkg-desc">✓ Layout Grafico 🔝 In Evidenza<br>✓ Pinnato in Cima al gruppo 24h<br>✓ Notifica PUSH Istantanea ai candidati in target!</div>
+      </div>
+
+      <div class="pkg-card pkg-vip" data-pkg="vip">
+        <div class="pkg-header">
+          <span class="pkg-title">👑 Sponsor VIP 7 Giorni</span>
+          <span class="pkg-price">500 Stelle (10,90 €)</span>
+        </div>
+        <div class="pkg-desc">✓ Pinnato in Cima per 7 Giorni<br>✓ Multi-Notifica PUSH a tutti i baristi registrati<br>✓ Garanzia di contatto o ripubblicazione gratuita.</div>
+      </div>
+    </div>
+
+    <!-- DATI DEL LOCALE E DELL'ANNUNCIO -->
+    <div class="section">
+      <div class="section-title">🏪 Dettagli del Bar / Locale</div>
+      
+      <div class="input-group">
+        <label>Nome del Locale / Attività</label>
+        <input type="text" id="businessName" placeholder="es. Caffè Torino Centro">
+      </div>
+
+      <div class="input-group">
+        <label>Ruolo Cercato</label>
+        <select id="roleSelect">
+          <option value="Barista">☕ Barista</option>
+          <option value="Bartender / Barman">🍹 Bartender / Mixologist</option>
+          <option value="Cameriere">🍽️ Cameriere / Sala</option>
+          <option value="Cuoco / Aiuto Cuoco">👨‍🍳 Cuoco / Aiuto Cuoco</option>
+          <option value="Pizzaiolo">🍕 Pizzaiolo</option>
+          <option value="Banconista">🍦 Banconista</option>
+          <option value="Lavapiatti">🧽 Lavapiatti</option>
+          <option value="Responsabile Bar/Sala">📊 Responsabile Bar / Sala</option>
+        </select>
+      </div>
+
+      <div class="input-group">
+        <label>Zona / Quartiere a Torino</label>
+        <select id="zoneSelect">
+          <option value="Centro">Centro</option>
+          <option value="San Salvario">San Salvario</option>
+          <option value="Crocetta">Crocetta</option>
+          <option value="Vanchiglia">Vanchiglia</option>
+          <option value="Santa Rita">Santa Rita</option>
+          <option value="Pozzo Strada">Pozzo Strada</option>
+          <option value="San Donato / Cit Turin">San Donato / Cit Turin</option>
+          <option value="Parella">Parella</option>
+          <option value="Lingotto / Mirafiori">Lingotto / Mirafiori</option>
+          <option value="Provincia di Torino">Provincia di Torino</option>
+        </select>
+      </div>
+
+      <div class="input-group">
+        <label>Tipo di Contratto / Turni</label>
+        <select id="shiftSelect">
+          <option value="Full-time">Full-time (Tempo Pieno)</option>
+          <option value="Part-time">Part-time</option>
+          <option value="Extra / Chiamata">Extra Weekend / Chiamata</option>
+          <option value="Turno Serale / Notturno">Turno Serale / Notturno</option>
+        </select>
+      </div>
+
+      <div class="input-group">
+        <label>Paga / Retribuzione Indicativa</label>
+        <input type="text" id="salaryInput" placeholder="es. 1.300€/mese o 10€/ora (o Trattabile)">
+      </div>
+
+      <div class="input-group">
+        <label>Descrizione Annuncio & Requisiti</label>
+        <textarea id="descriptionInput" placeholder="es. Cercasi barista esperto/a per gestione banco e caffetteria mattina. Attestato HACCP richiesto..."></textarea>
+      </div>
+
+      <div class="input-group">
+        <label>Contatto per Candidature (Telefono / WhatsApp / @username)</label>
+        <input type="text" id="contactInput" placeholder="es. @tuousername oppure 340 1234567">
+      </div>
+
+    </div>
+  </form>
+
+  <div class="footer-btn-container">
+    <button type="button" class="btn-submit" id="submitBtn">🚀 Pubblica Annuncio (Gratis)</button>
+  </div>
+
+  <script>
+    const tg = window.Telegram ? window.Telegram.WebApp : null;
+    if (tg) {
+      tg.expand();
+      tg.ready();
+    }
+
+    let selectedPackage = 'free';
+
+    // Gestione selezione pacchetto
+    document.querySelectorAll('.pkg-card').forEach(card => {
+      card.addEventListener('click', () => {
+        document.querySelectorAll('.pkg-card').forEach(c => c.classList.remove('selected'));
+        card.classList.add('selected');
+        selectedPackage = card.dataset.pkg;
+
+        const submitBtn = document.getElementById('submitBtn');
+        if (selectedPackage === 'free') {
+          submitBtn.innerText = '🚀 Pubblica Annuncio (Gratis)';
+          submitBtn.style.background = '#2481cc';
+        } else if (selectedPackage === 'evidenza') {
+          submitBtn.innerText = '⭐ Procedi al Pagamento (250 Stelle / 5,39€)';
+          submitBtn.style.background = '#f57c00';
+        } else if (selectedPackage === 'vip') {
+          submitBtn.innerText = '👑 Procedi al Pagamento VIP (500 Stelle / 10,90€)';
+          submitBtn.style.background = '#e53935';
+        }
+
+        if (tg && tg.HapticFeedback) {
+          tg.HapticFeedback.impactOccurred('light');
+        }
+      });
+    });
+
+    async function submitJob() {
+      const submitBtn = document.getElementById('submitBtn');
+      const business = document.getElementById('businessName').value.trim();
+      const role = document.getElementById('roleSelect').value;
+      const zone = document.getElementById('zoneSelect').value;
+      const shift = document.getElementById('shiftSelect').value;
+      const salary = document.getElementById('salaryInput').value.trim();
+      const desc = document.getElementById('descriptionInput').value.trim();
+      const contact = document.getElementById('contactInput').value.trim();
+
+      if (!business || !desc || !contact) {
+        alert('Compila il Nome del locale, la Descrizione e il Contatto per procedere!');
+        return;
+      }
+
+      submitBtn.disabled = true;
+      submitBtn.innerText = '⏳ Elaborazione in corso...';
+
+      const user = (tg && tg.initDataUnsafe && tg.initDataUnsafe.user) ? tg.initDataUnsafe.user : null;
+
+      const payload = {
+        action: 'publish_job_offer',
+        user_id: user ? user.id : null,
+        username: user ? (user.username || '') : '',
+        package: selectedPackage,
+        business_name: business,
+        role: role,
+        zone: zone,
+        shift: shift,
+        salary: salary,
+        description: desc,
+        contact: contact
+      };
+
+      if (tg && tg.sendData) {
+        try {
+          tg.sendData(JSON.stringify(payload));
+        } catch(e) {
+          console.error('tg.sendData error:', e);
+        }
+      }
+
+      if (tg && tg.HapticFeedback) {
+        tg.HapticFeedback.notificationOccurred('success');
+      }
+
+      setTimeout(() => {
+        if (tg && tg.close) {
+          tg.close();
+        } else {
+          alert('Offerta inoltrata al bot!');
+        }
+      }, 500);
+    }
+
+    document.getElementById('submitBtn').addEventListener('click', submitJob);
+  </script>
+</body>
+</html>

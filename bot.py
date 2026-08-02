@@ -309,9 +309,13 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif arg == "formato":
             await cmd_formato(update, context)
             return
+        elif arg in ["pubblica", "offerta"]:
+            await cmd_pubblica(update, context)
+            return
         elif arg == "premium":
             await cmd_premium(update, context)
             return
+
 
 
     welcome = config.WELCOME_MESSAGE.format(admin_username=config.ADMIN_USERNAME)
@@ -694,17 +698,81 @@ async def precheckout_callback(update: Update, context: ContextTypes.DEFAULT_TYP
 
 
 async def successful_payment_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Gestisce l'avvenuto pagamento automatico (Telegram Stars o Stripe)."""
+    """Gestisce l'avvenuto pagamento automatico per candidati o annunci datori."""
     user = update.effective_user
-    new_date = db.make_user_premium(user.id, days=30)
-    logger.info(f"🎉 Pagamento completato da {user.first_name} ({user.id})! Premium attivo fino al {new_date}")
+    payment_info = update.message.successful_payment
+    payload = payment_info.invoice_payload
 
-    msg = (
-        f"🎉 *PAGAMENTO RICEVUTO CON SUCCESSO!*\n\n"
-        f"Il tuo account è stato aggiornato a *CANDIDATO PREMIUM* fino al *{new_date}*!\n\n"
-        f"✨ *Da ora sei attivo:* riceverai in tempo reale le notifiche push in privato con i contatti diretti (@username o numero di telefono) dei datori di lavoro di Torino appena pubblicano un'offerta!"
-    )
-    await update.message.reply_text(msg, parse_mode=ParseMode.MARKDOWN)
+    # SE È UN ANNUNCIO DI LAVORO A PAGAMENTO (250 o 500 STELLE)
+    if payload.startswith("job_offer_") or "pending_job" in context.user_data:
+        job = context.user_data.get("pending_job", {})
+        pkg = job.get("pkg", "evidenza")
+        business = job.get("business", "BAR / LOCALE TORINO")
+        role = job.get("role", "")
+        zone = job.get("zone", "")
+        shift = job.get("shift", "")
+        salary = job.get("salary", "")
+        desc = job.get("desc", "")
+        contact = job.get("contact", "")
+
+        header = "🔝 *OFFERTA IN EVIDENZA (SPONSOR 24H)* 🔝" if pkg == "evidenza" else "👑 *SPONSOR VIP (7 GIORNI IN CIMA)* 👑"
+
+        post_text = (
+            f"{header}\n\n"
+            f"🏪 *LOCALE:* {business.upper()}\n"
+            f"💼 *Ruolo Cercato:* {role}\n"
+            f"📍 *Zona:* {zone}\n"
+            f"⏰ *Turni:* {shift}\n"
+            f"💰 *Paga:* {salary if salary else 'Trattabile'}\n\n"
+            f"📝 *Descrizione & Requisiti:*\n_{desc}_\n\n"
+            f"📞 *Contatto Candidature:* {contact}\n"
+            f"👤 *Pubblicato da:* @{user.username if user.username else user.first_name}"
+        )
+
+        msg_id = None
+        if config.GROUP_ID != 0:
+            try:
+                pub_msg = await context.bot.send_message(
+                    chat_id=config.GROUP_ID,
+                    text=post_text,
+                    parse_mode=ParseMode.MARKDOWN
+                )
+                msg_id = pub_msg.message_id
+                # Fissa il post in cima al gruppo (Pin)
+                try:
+                    await context.bot.pin_chat_message(
+                        chat_id=config.GROUP_ID,
+                        message_id=pub_msg.message_id
+                    )
+                except Exception as pe:
+                    logger.warning(f"Impossibile fissare post in cima: {pe}")
+
+                import matcher
+                await matcher.notify_matched_candidates(context.bot, post_text, user.username or "", pub_msg.message_id)
+            except Exception as e:
+                logger.error(f"Errore pubblicazione offerta a pagamento: {e}")
+
+        # Pulisci pending_job
+        context.user_data.pop("pending_job", None)
+
+        await update.message.reply_text(
+            "🎉 *PAGAMENTO RICEVUTO CON SUCCESSO!*\n\n"
+            "Il tuo annuncio in evidenza è stato pubblicato, **fissato in cima al gruppo** e notificato in privato a tutti i candidati qualificati a Torino!",
+            parse_mode=ParseMode.MARKDOWN
+        )
+
+    # SE È UN ABBONAMENTO CANDIDATO PREMIUM (100 STELLE / 2,19€)
+    else:
+        new_date = db.make_user_premium(user.id, days=30)
+        logger.info(f"🎉 Pagamento completato da {user.first_name} ({user.id})! Premium attivo fino al {new_date}")
+
+        msg = (
+            f"🎉 *PAGAMENTO RICEVUTO CON SUCCESSO!*\n\n"
+            f"Il tuo account è stato aggiornato a *CANDIDATO PREMIUM* fino al *{new_date}*!\n\n"
+            f"✨ *Da ora sei attivo:* riceverai in tempo reale le notifiche push in privato con i contatti diretti (@username o numero di telefono) dei datori di lavoro di Torino appena pubblicano un'offerta!"
+        )
+        await update.message.reply_text(msg, parse_mode=ParseMode.MARKDOWN)
+
 
 
 
@@ -787,6 +855,24 @@ async def cmd_profilo(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 
+async def cmd_pubblica(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Comando /pubblica — apre il form di pubblicazione per datori di lavoro."""
+    reply_keyboard = ReplyKeyboardMarkup(
+        [[KeyboardButton("📢 Apri Modulo Pubblicazione Offerta", web_app=WebAppInfo(url=config.WEBAPP_PUBBLICA_URL))]],
+        resize_keyboard=True
+    )
+    msg = (
+        "💼 *PUBBLICA UN'OFFERTA DI LAVORO HORECA*\n\n"
+        "Trova subito personale qualificato (Baristi, Camerieri, Cuochi, Pizzaioli) a Torino!\n\n"
+        "Puoi scegliere tra:\n"
+        "• 🆓 *Annuncio Gratuito (0€)*\n"
+        "• ⭐ *In Evidenza 24h (250 Stelle / 5,39€)* — Post 🔝 + Pin 24h + Push ai candidati!\n"
+        "• 👑 *Sponsor VIP 7 Giorni (500 Stelle / 10,90€)* — Post 👑 + Pin 7 Giorni + Multi-Push!\n\n"
+        "Clicca sul pulsante qui sotto per aprire il modulo di compilazione:"
+    )
+    await send_smart_reply(update, context, msg, reply_markup=reply_keyboard, deep_link_arg="pubblica")
+
+
 async def on_webapp_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Riceve i dati inviati dalla Telegram WebApp."""
     user = update.effective_user
@@ -794,7 +880,9 @@ async def on_webapp_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     try:
         data = json.loads(data_str)
-        if data.get("action") == "save_candidate_profile":
+        action = data.get("action")
+
+        if action == "save_candidate_profile":
             roles = json.dumps(data.get("roles", []))
             skills = json.dumps(data.get("skills", []))
             experience = data.get("experience", "")
@@ -825,9 +913,85 @@ async def on_webapp_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "Per rivedere i tuoi dati in qualsiasi momento scrivi `/profilo`.",
                 parse_mode=ParseMode.MARKDOWN
             )
+
+        elif action == "publish_job_offer":
+            pkg = data.get("package", "free")
+            business = data.get("business_name", "").strip()
+            role = data.get("role", "").strip()
+            zone = data.get("zone", "").strip()
+            shift = data.get("shift", "").strip()
+            salary = data.get("salary", "").strip()
+            desc = data.get("description", "").strip()
+            contact = data.get("contact", "").strip()
+
+            job_details = {
+                "user_id": user.id,
+                "username": user.username or "",
+                "business": business,
+                "role": role,
+                "zone": zone,
+                "shift": shift,
+                "salary": salary,
+                "desc": desc,
+                "contact": contact,
+                "pkg": pkg
+            }
+
+            if pkg == "free":
+                post_text = (
+                    f"📢 *OFFERTA DI LAVORO — {business.upper()}*\n\n"
+                    f"💼 *Ruolo Cercato:* {role}\n"
+                    f"📍 *Zona:* {zone}\n"
+                    f"⏰ *Turni:* {shift}\n"
+                    f"💰 *Paga:* {salary if salary else 'Trattabile'}\n\n"
+                    f"📝 *Descrizione & Requisiti:*\n_{desc}_\n\n"
+                    f"📞 *Contatto Candidature:* {contact}\n"
+                    f"👤 *Pubblicato da:* @{user.username if user.username else user.first_name}"
+                )
+
+                if config.GROUP_ID != 0:
+                    try:
+                        pub_msg = await context.bot.send_message(
+                            chat_id=config.GROUP_ID,
+                            text=post_text,
+                            parse_mode=ParseMode.MARKDOWN
+                        )
+                        import matcher
+                        await matcher.notify_matched_candidates(context.bot, post_text, user.username or "", pub_msg.message_id)
+                    except Exception as e:
+                        logger.error(f"Errore pubblicazione gruppo: {e}")
+
+                await update.effective_message.reply_text(
+                    "✅ *ANNUNCIO GRATUITO PUBBLICATO!*\n\n"
+                    "Il tuo annuncio è stato inviato nel gruppo ed è stato elaborato dall'algoritmo di matching per notificare i candidati idonei a Torino!",
+                    parse_mode=ParseMode.MARKDOWN
+                )
+
+            elif pkg in ["evidenza", "vip"]:
+                context.user_data["pending_job"] = job_details
+                stars = 250 if pkg == "evidenza" else 500
+                eur_cents = 539 if pkg == "evidenza" else 1090
+                pkg_name = "In Evidenza 24h" if pkg == "evidenza" else "Sponsor VIP 7 Giorni"
+
+                title = f"Offerta {pkg_name} Horeca"
+                description = f"Annuncio {business} ({role} - {zone}) con Pin e Push Broadcast"
+                payload = f"job_offer_{pkg}_{stars}"
+                currency = "XTR"
+                prices = [LabeledPrice(f"Annuncio {pkg_name}", stars)]
+
+                await context.bot.send_invoice(
+                    chat_id=user.id,
+                    title=title,
+                    description=description,
+                    payload=payload,
+                    provider_token="",  # Telegram Stars
+                    currency=currency,
+                    prices=prices,
+                )
     except Exception as e:
         logger.error(f"Errore salvataggio dati WebApp: {e}")
-        await update.effective_message.reply_text("❌ Si è verificato un errore durante il salvataggio. Riprova con `/registrati`.")
+        await update.effective_message.reply_text("❌ Si è verificato un errore. Riprova con `/pubblica`.")
+
 
 
 # ─── Main ──────────────────────────────────────────────────────────────────────────────
@@ -856,7 +1020,10 @@ def main():
     app.add_handler(CommandHandler("formato", cmd_formato))
     app.add_handler(CommandHandler("evidenza", cmd_evidenza))
     app.add_handler(CommandHandler("registrati", cmd_registrati))
+    app.add_handler(CommandHandler("pubblica", cmd_pubblica))
+    app.add_handler(CommandHandler("offerta", cmd_pubblica))
     app.add_handler(CommandHandler("profilo", cmd_profilo))
+
     app.add_handler(CommandHandler("premium", cmd_premium))
     app.add_handler(CommandHandler("grant_premium", cmd_grant_premium))
     app.add_handler(CommandHandler("match", cmd_match))

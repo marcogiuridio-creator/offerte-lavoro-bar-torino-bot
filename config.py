@@ -11,6 +11,8 @@ ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "marcogiuridio o @banu80")
 
 STRIPE_PROVIDER_TOKEN = os.getenv("STRIPE_PROVIDER_TOKEN", "")
 WEBAPP_URL = os.getenv("WEBAPP_URL", "https://raw.githack.com/marcogiuridio-creator/offerte-lavoro-bar-torino-bot/main/webapp/index.html?v=20260802_3")
+WEBAPP_PUBBLICA_URL = os.getenv("WEBAPP_PUBBLICA_URL", "https://raw.githack.com/marcogiuridio-creator/offerte-lavoro-bar-torino-bot/main/webapp/pubblica.html?v=20260802_1")
+
 
 
 # ─── Rate limiting ─────────────────────────────────────────────────────────────
