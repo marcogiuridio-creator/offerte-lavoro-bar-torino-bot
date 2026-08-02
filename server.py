@@ -9,15 +9,24 @@ import database as db
 
 logger = logging.getLogger(__name__)
 
-WEBAPP_DIR = os.path.join(os.path.dirname(__file__), "webapp")
+BOT_DIR = os.path.dirname(__file__)
 
 
 class WebAppHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
-        super().__init__(*args, directory=WEBAPP_DIR, **kwargs)
+        super().__init__(*args, directory=BOT_DIR, **kwargs)
 
     def do_GET(self):
+        # Se la richiesta chiama direttamente /index.html, /pubblica.html, /dashboard.html, reindirizza a /webapp/
+        if self.path in ("/", "/index.html"):
+            self.path = "/webapp/index.html"
+        elif self.path.startswith("/pubblica.html"):
+            self.path = "/webapp" + self.path
+        elif self.path.startswith("/dashboard.html"):
+            self.path = "/webapp" + self.path
+
         if self.path.startswith("/api/get_employer_candidates"):
+
             try:
                 import urllib.parse
                 parsed = urllib.parse.urlparse(self.path)
