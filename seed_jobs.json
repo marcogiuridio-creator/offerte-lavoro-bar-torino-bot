@@ -1,15 +1,15 @@
 [
   {
     "job_id": 1,
-    "user_id": 307812499,
-    "username": "mallybio",
-    "business_name": "CAFFÈ CENTRO",
+    "user_id": 356464630,
+    "username": "cinziaciervo",
+    "business_name": "TEST2",
     "role": "Barista",
     "zone": "Centro",
     "shift": "Full-time",
-    "salary": "Da definire",
-    "description": "Barista capace referenziato per locale in centro a Torino",
-    "contact": "3341202939",
+    "salary": "Test2",
+    "description": "Test2",
+    "contact": "Test2",
     "package": "vip",
     "is_verified": 1,
     "message_id": 36159
