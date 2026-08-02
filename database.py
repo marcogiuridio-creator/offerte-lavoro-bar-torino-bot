@@ -566,10 +566,16 @@ def update_job_offer_message_id(job_id: int, message_id: int):
         conn.execute("UPDATE job_offers SET message_id = ? WHERE job_id = ?", (message_id, job_id))
 
 
-def get_user_job_offers(user_id: int):
-    """Recupera tutte le offerte pubblicate da uno specifico titolare."""
+def get_user_job_offers(user_id: int, username: str = ""):
+    """Recupera tutte le offerte pubblicate da uno specifico titolare (sia per user_id che per username)."""
     with get_conn() as conn:
-        return conn.execute("SELECT * FROM job_offers WHERE user_id = ? ORDER BY created_at DESC", (user_id,)).fetchall()
+        clean_user = username.lower().replace("@", "").strip() if username else ""
+        return conn.execute("""
+            SELECT * FROM job_offers
+            WHERE user_id = ? OR (username != '' AND LOWER(username) = ?)
+            ORDER BY created_at DESC
+        """, (user_id, clean_user)).fetchall()
+
 
 
 def get_all_job_offers(limit: int = 50):
