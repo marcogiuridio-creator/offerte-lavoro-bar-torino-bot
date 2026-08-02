@@ -1223,7 +1223,51 @@ async def on_webapp_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 
+async def cmd_test_offerta(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Comando di test riservato agli Admin: simula la pubblicazione di un annuncio senza inviare nulla al gruppo pubblico."""
+    user = update.effective_user
+    if user.username not in ("marcogiuridio", "banu80"):
+        await update.message.reply_text("⛔ Comando riservato agli Amministratori.")
+        return
+
+    job_id = db.create_job_offer(
+        user_id=user.id,
+        username=user.username or "",
+        business_name="Caffè Torino (TEST PRIVATO)",
+        role="Barista",
+        zone="Centro",
+        shift="Full-time",
+        salary="1.300€ / mese",
+        description="Annuncio di prova riservato per testare il flusso di pre-screening, il report ed la Dashboard Mini-App in privato.",
+        contact=f"@{user.username}" if user.username else "Admin",
+        package="evidenza",
+        is_verified=1
+    )
+
+    dash_kb = InlineKeyboardMarkup([
+        [InlineKeyboardButton("📊 Apri Dashboard Candidati (Mini-App)", web_app=WebAppInfo(url=f"{config.WEBAPP_DASHBOARD_URL}?job_id={job_id}"))],
+        [InlineKeyboardButton("📩 Simula Candidatura 1-Click (Pre-Screening)", callback_data=f"apply_start:{job_id}")]
+    ])
+
+    import matcher
+    post_text = "🔝 *OFFERTA DI PROVA IN EVIDENZA (TEST PRIVATO)* 🔝\n\n🏪 *LOCALE:* CAFFÈ TORINO (TEST)\n💼 *Ruolo Cercato:* Barista\n📍 *Zona:* Centro\n⏰ *Turni:* Full-time\n💰 *Paga:* 1.300€ / mese\n\n📝 *Descrizione:* Annuncio di prova per verificare la Dashboard e le candidature."
+
+    # 1. Invia il report candidati in privato all'admin
+    await matcher.send_employer_candidates_report(context.bot, user.id, post_text)
+
+    # 2. Invia la scheda di conferma con il tasto Dashboard Mini-App e Tasto Candidati
+    await update.message.reply_text(
+        "🧪 *TEST PRIVATO AVVIATO (NESSUN MESSAGGIO INVIATO AL GRUPPO)*\n\n"
+        f"✅ Creato annuncio di prova #{job_id} per *Caffè Torino (TEST)*!\n\n"
+        "📋 Ti abbiamo inviato qui sopra il **Rapporto Candidati** privato.\n"
+        "👇 Clicca sui pulsanti qui sotto per testare la **Dashboard Mini-App** e il **Pre-screening 1-Click**:",
+        reply_markup=dash_kb,
+        parse_mode=ParseMode.MARKDOWN
+    )
+
+
 async def post_init(application: Application):
+
     """Configura automaticamente il menu comandi nativo di Telegram con le relative icone."""
     commands = [
         BotCommand("registrati", "🍸 Registra / Modifica Profilo Candidato"),
@@ -1271,6 +1315,8 @@ def main():
     app.add_handler(CommandHandler("premium", cmd_premium))
     app.add_handler(CommandHandler("grant_premium", cmd_grant_premium))
     app.add_handler(CommandHandler("match", cmd_match))
+    app.add_handler(CommandHandler("test_offerta", cmd_test_offerta))
+
 
 
 
