@@ -47,8 +47,19 @@ logger = logging.getLogger(__name__)
 
 # ─── Helpers ───────────────────────────────────────────────────────────────────
 
-def is_admin(user_id: int) -> bool:
-    return user_id in config.ADMIN_IDS
+def is_admin(user_or_id) -> bool:
+    """Verifica se l'utente è amministratore (per ID numerico o username)."""
+    if isinstance(user_or_id, int):
+        return user_or_id in config.ADMIN_IDS
+    if hasattr(user_or_id, "id") and user_or_id.id in config.ADMIN_IDS:
+        return True
+    uname = getattr(user_or_id, "username", "") or ""
+    if uname:
+        clean_user = uname.lower().replace("@", "").strip()
+        if clean_user in ["marcogiuridio", "banu80"]:
+            return True
+    return False
+
 
 
 def get_text(message) -> str:
@@ -1540,9 +1551,13 @@ async def cmd_broadcast_titolari(update: Update, context: ContextTypes.DEFAULT_T
 
 
 async def cmd_mie_offerte(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Mostra le offerte pubblicate dal datore con tasto di modifica in WebApp."""
+    """Mostra le offerte pubblicate dal datore o tutte le offerte se admin."""
     user = update.effective_user
     offers = db.get_user_job_offers(user.id)
+
+    # Se l'utente è un admin e non ha offerte proprie, mostra comunque le offerte del database
+    if not offers and is_admin(user):
+        offers = db.get_all_job_offers(limit=20)
 
     if not offers:
         await update.message.reply_text(
@@ -1561,8 +1576,8 @@ async def cmd_mie_offerte(update: Update, context: ContextTypes.DEFAULT_TYPE):
         pkg = job["package"]
         created = job["created_at"]
 
-        edit_url = f"{config.WEBAPP_PUBBLICA_URL}&edit_job_id={job_id}" if "?" in config.WEBAPP_PUBBLICA_URL else f"{config.WEBAPP_PUBBLICA_URL}?edit_job_id={job_id}"
-        dash_url = f"{config.WEBAPP_DASHBOARD_URL}&job_id={job_id}" if "?" in config.WEBAPP_DASHBOARD_URL else f"{config.WEBAPP_DASHBOARD_URL}?job_id={job_id}"
+        edit_url = f"{config.WEBAPP_PUBBLICA_URL}&edit_job_id={job_id}&user_id={user.id}" if "?" in config.WEBAPP_PUBBLICA_URL else f"{config.WEBAPP_PUBBLICA_URL}?edit_job_id={job_id}&user_id={user.id}"
+        dash_url = f"{config.WEBAPP_DASHBOARD_URL}&job_id={job_id}&user_id={user.id}" if "?" in config.WEBAPP_DASHBOARD_URL else f"{config.WEBAPP_DASHBOARD_URL}?job_id={job_id}&user_id={user.id}"
 
         kb = InlineKeyboardMarkup([
             [InlineKeyboardButton("✏️ Modifica Annuncio (Mini-App)", web_app=WebAppInfo(url=edit_url))],
@@ -1580,11 +1595,13 @@ async def cmd_mie_offerte(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def cmd_edit_offerta(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Comando Admin: /edit_offerta JOB_ID — permette all'admin di modificare qualsiasi annuncio."""
-    if not is_admin(update.effective_user.id):
+    user = update.effective_user
+    if not is_admin(user):
+        await update.message.reply_text("❌ Questo comando è riservato agli amministratori.")
         return
 
     if not context.args:
-        await update.message.reply_text("Uso Admin: `/edit_offerta JOB_ID`\nEs: `/edit_offerta 3`", parse_mode=ParseMode.MARKDOWN)
+        await update.message.reply_text("Uso Admin: `/edit_offerta JOB_ID`\nEs: `/edit_offerta 1`", parse_mode=ParseMode.MARKDOWN)
         return
 
     try:
@@ -1594,7 +1611,7 @@ async def cmd_edit_offerta(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(f"❌ Annuncio #{job_id} non trovato nel database.")
             return
 
-        edit_url = f"{config.WEBAPP_PUBBLICA_URL}&edit_job_id={job_id}" if "?" in config.WEBAPP_PUBBLICA_URL else f"{config.WEBAPP_PUBBLICA_URL}?edit_job_id={job_id}"
+        edit_url = f"{config.WEBAPP_PUBBLICA_URL}&edit_job_id={job_id}&user_id={user.id}" if "?" in config.WEBAPP_PUBBLICA_URL else f"{config.WEBAPP_PUBBLICA_URL}?edit_job_id={job_id}&user_id={user.id}"
 
         kb = InlineKeyboardMarkup([
             [InlineKeyboardButton("✏️ Modifica Annuncio come Admin", web_app=WebAppInfo(url=edit_url))]
@@ -1614,7 +1631,9 @@ async def cmd_edit_offerta(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def cmd_offerte(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Comando Admin: /offerte — mostra l'elenco di tutte le ultime offerte pubblicate nel DB con pulsante modifica."""
-    if not is_admin(update.effective_user.id):
+    user = update.effective_user
+    if not is_admin(user):
+        await update.message.reply_text("❌ Questo comando è riservato agli amministratori.")
         return
 
     all_jobs = db.get_all_job_offers(limit=20)
@@ -1632,11 +1651,12 @@ async def cmd_offerte(update: Update, context: ContextTypes.DEFAULT_TYPE):
         created = job["created_at"]
         uname = f"@{job['username']}" if job["username"] else f"ID {job['user_id']}"
 
-        edit_url = f"{config.WEBAPP_PUBBLICA_URL}&edit_job_id={job_id}" if "?" in config.WEBAPP_PUBBLICA_URL else f"{config.WEBAPP_PUBBLICA_URL}?edit_job_id={job_id}"
+        edit_url = f"{config.WEBAPP_PUBBLICA_URL}&edit_job_id={job_id}&user_id={user.id}" if "?" in config.WEBAPP_PUBBLICA_URL else f"{config.WEBAPP_PUBBLICA_URL}?edit_job_id={job_id}&user_id={user.id}"
+        dash_url = f"{config.WEBAPP_DASHBOARD_URL}&job_id={job_id}&user_id={user.id}" if "?" in config.WEBAPP_DASHBOARD_URL else f"{config.WEBAPP_DASHBOARD_URL}?job_id={job_id}&user_id={user.id}"
 
         kb = InlineKeyboardMarkup([
             [InlineKeyboardButton("✏️ Modifica Annuncio come Admin", web_app=WebAppInfo(url=edit_url))],
-            [InlineKeyboardButton("📊 Dashboard Candidati", web_app=WebAppInfo(url=f"{config.WEBAPP_DASHBOARD_URL}&job_id={job_id}" if "?" in config.WEBAPP_DASHBOARD_URL else f"{config.WEBAPP_DASHBOARD_URL}?job_id={job_id}"))]
+            [InlineKeyboardButton("📊 Dashboard Candidati", web_app=WebAppInfo(url=dash_url))]
         ])
 
         msg = (
@@ -1647,6 +1667,7 @@ async def cmd_offerte(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"📅 *Data:* {created}"
         )
         await update.message.reply_text(msg, reply_markup=kb, parse_mode=ParseMode.MARKDOWN)
+
 
 
 
