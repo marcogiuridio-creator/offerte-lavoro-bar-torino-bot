@@ -973,7 +973,7 @@ async def on_candidate_apply_submit(update: Update, context: ContextTypes.DEFAUL
 
 
 async def on_employer_app_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Gestisce la decisione del titolare (Convoca a Colloquio / Rifiuta)."""
+    """Gestisce la decisione del titolare (Convoca a Colloquio / Rifiuta) e notifica il candidato."""
     query = update.callback_query
     await query.answer()
     parts = query.data.split(":")
@@ -987,24 +987,41 @@ async def on_employer_app_status(update: Update, context: ContextTypes.DEFAULT_T
             query.message.text + "\n\n🟢 *STATO: CANDIDATO CONVOCATO A COLLOQUIO*",
             parse_mode=ParseMode.MARKDOWN
         )
+
+        # Invia notifica automatica in privato al candidato
+        try:
+            with db.get_conn() as conn:
+                app_info = conn.execute("""
+                    SELECT a.candidate_id, j.business_name, j.role, j.username as employer_user
+                    FROM applications a
+                    JOIN job_offers j ON a.job_id = j.job_id
+                    WHERE a.app_id = ?
+                """, (app_id,)).fetchone()
+
+                if app_info:
+                    cand_id = app_info["candidate_id"]
+                    biz_name = app_info["business_name"]
+                    role_name = app_info["role"]
+                    emp_user = app_info["employer_user"]
+                    emp_ref = f"@{emp_user}" if emp_user else "il titolare del locale"
+
+                    msg_cand = (
+                        f"🎉 *SPLENDIDA NOTIZIA! SEI STATO SELEZIONATO PER UN COLLOQUIO!*\n\n"
+                        f"🏪 *Locale:* {biz_name}\n"
+                        f"💼 *Ruolo:* {role_name}\n\n"
+                        f"Il titolare del locale ha esaminato la tua candidatura ed è interessato al tuo profilo!\n"
+                        f"Ti contatteranno a breve oppure puoi scrivergli subito su Telegram: {emp_ref}"
+                    )
+                    await context.bot.send_message(chat_id=cand_id, text=msg_cand, parse_mode=ParseMode.MARKDOWN)
+        except Exception as e:
+            logger.warning(f"Impossibile notificare candidato per colloquio: {e}")
+
     elif new_status == "rejected":
         await query.edit_message_text(
             query.message.text + "\n\n🔴 *STATO: CANDIDATURA ARCHIVIATA / NON IDONEA*",
             parse_mode=ParseMode.MARKDOWN
         )
 
-
-    # SE È UN ABBONAMENTO CANDIDATO PREMIUM (100 STELLE / 2,19€)
-    else:
-        new_date = db.make_user_premium(user.id, days=30)
-        logger.info(f"🎉 Pagamento completato da {user.first_name} ({user.id})! Premium attivo fino al {new_date}")
-
-        msg = (
-            f"🎉 *PAGAMENTO RICEVUTO CON SUCCESSO!*\n\n"
-            f"Il tuo account è stato aggiornato a *CANDIDATO PREMIUM* fino al *{new_date}*!\n\n"
-            f"✨ *Da ora sei attivo:* riceverai in tempo reale le notifiche push in privato con i contatti diretti (@username o numero di telefono) dei datori di lavoro di Torino appena pubblicano un'offerta!"
-        )
-        await update.message.reply_text(msg, parse_mode=ParseMode.MARKDOWN)
 
 
 
