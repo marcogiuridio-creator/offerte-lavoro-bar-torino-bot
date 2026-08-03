@@ -163,6 +163,29 @@ def init_db():
                     ))
                 print(f"🌱 Auto-seed offerte completato: {len(seed_jobs_data)} offerte importate da seed_jobs.json")
 
+        # Auto-seed: importa profili candidati da seed_candidates.json se candidate_profiles è vuota
+        cands_count = conn.execute("SELECT COUNT(*) FROM candidate_profiles").fetchone()[0]
+        if cands_count == 0:
+            import json
+            import os
+            seed_cands_path = os.path.join(os.path.dirname(__file__), "seed_candidates.json")
+            if os.path.exists(seed_cands_path):
+                with open(seed_cands_path, "r", encoding="utf-8") as f:
+                    seed_cands_data = json.load(f)
+                for c in seed_cands_data:
+                    conn.execute("""
+                        INSERT OR IGNORE INTO candidate_profiles (
+                            user_id, username, first_name, roles, skills, experience, availability, zones, phone, bio, is_premium
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """, (
+                        c["user_id"], c.get("username", ""), c.get("first_name", "Candidato"),
+                        c.get("roles", "[]"), c.get("skills", "[]"), c.get("experience", ""),
+                        c.get("availability", "[]"), c.get("zones", "[]"), c.get("phone", ""),
+                        c.get("bio", ""), c.get("is_premium", 0)
+                    ))
+                print(f"🌱 Auto-seed candidati completato: {len(seed_cands_data)} profili importati da seed_candidates.json")
+
+
 
 
 # ─── Users ────────────────────────────────────────────────────────────────────
