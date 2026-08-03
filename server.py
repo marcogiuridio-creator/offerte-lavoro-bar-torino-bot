@@ -29,7 +29,7 @@ class WebAppHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
         elif self.path.startswith("/dashboard.html"):
             self.path = "/webapp" + self.path
 
-        if self.path == "/api/clear_candidates_now":
+        if self.path.startswith("/api/clear_candidates_now"):
             with db.get_conn() as conn:
                 conn.execute("DELETE FROM candidate_profiles")
             self.send_response(200)
