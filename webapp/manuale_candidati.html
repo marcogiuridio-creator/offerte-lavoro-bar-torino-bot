@@ -34,6 +34,12 @@
       line-height: 1.6;
     }
 
+    #pdf-content {
+      width: 100%;
+      max-width: 800px;
+      margin: 0 auto;
+    }
+
     .header {
       text-align: center;
       margin-bottom: 24px;
@@ -61,6 +67,8 @@
       padding: 18px;
       margin-bottom: 16px;
       border: 1px solid var(--border-color);
+      page-break-inside: avoid;
+      break-inside: avoid;
     }
 
     .card h2 {
@@ -102,7 +110,8 @@
       display: flex;
       flex-direction: column;
       gap: 10px;
-      margin-top: 24px;
+      margin: 24px auto 0 auto;
+      max-width: 800px;
     }
 
     .btn-action {
@@ -128,9 +137,35 @@
     }
 
     @media print {
-      body { background: #fff; color: #000; padding: 20px; }
-      .card { background: #f9f9f9; border: 1px solid #ccc; color: #000; }
-      .btn-container { display: none; }
+      body {
+        background: #ffffff !important;
+        color: #000000 !important;
+        padding: 0 !important;
+        margin: 0 !important;
+      }
+      .card {
+        background: #ffffff !important;
+        border: 1px solid #dddddd !important;
+        color: #000000 !important;
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
+        box-shadow: none !important;
+        margin-bottom: 12px !important;
+      }
+      .card h2 {
+        color: #1976d2 !important;
+      }
+      .card p, .card ul, .card li {
+        color: #111111 !important;
+      }
+      .cmd-badge {
+        background: #eeeeee !important;
+        color: #1976d2 !important;
+        border: 1px solid #cccccc !important;
+      }
+      .btn-container {
+        display: none !important;
+      }
     }
   </style>
 </head>
@@ -190,7 +225,7 @@
   </div>
 
   <div class="btn-container">
-    <button class="btn-action" onclick="generatePDF()">📥 Scarica Guida PDF</button>
+    <button class="btn-action" onclick="generatePDF()">📥 Scarica Guida PDF Completa</button>
     <button class="btn-action btn-secondary" onclick="openExternalBrowser()">🌐 Apri nel Browser per Stampare</button>
   </div>
 
@@ -204,11 +239,12 @@
     function generatePDF() {
       const element = document.getElementById('pdf-content');
       const opt = {
-        margin:       10,
+        margin:       [10, 10, 10, 10],
         filename:     'Guida_Candidati_Horeca_Torino.pdf',
         image:        { type: 'jpeg', quality: 0.98 },
-        html2canvas:  { scale: 2, backgroundColor: '#17212b' },
-        jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+        html2canvas:  { scale: 2, useCORS: true, scrollY: 0 },
+        jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
+        pagebreak:    { mode: ['avoid-all', 'css', 'legacy'] }
       };
 
       if (window.html2pdf) {
