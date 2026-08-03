@@ -1495,9 +1495,54 @@ async def cmd_lavoratori(update: Update, context: ContextTypes.DEFAULT_TYPE):
     for idx, d in enumerate(top_lavoratori, 1):
         name = d["first_name"] or "Utente"
         uname = f" (@{d['username']})" if d["username"] else ""
-        lines.append(f"{idx}. *{name}*{uname}")
+        await update.message.reply_text("\n".join(lines), parse_mode=ParseMode.MARKDOWN)
 
-    await update.message.reply_text("\n".join(lines), parse_mode=ParseMode.MARKDOWN)
+
+async def cmd_candidati(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Comando Admin: /candidati — mostra l'elenco di tutti gli utenti che hanno compilato il profilo candidato nel bot."""
+    user = update.effective_user
+    if not is_admin(user):
+        await update.message.reply_text("❌ Questo comando è riservato agli amministratori.")
+        return
+
+    cands = db.get_all_candidates(limit=50)
+    if not cands:
+        await update.message.reply_text(
+            "📋 *Nessun profilo candidato registrato nel database.*",
+            parse_mode=ParseMode.MARKDOWN
+        )
+        return
+
+    dash_url = f"{config.WEBAPP_DASHBOARD_URL}&user_id={user.id}" if "?" in config.WEBAPP_DASHBOARD_URL else f"{config.WEBAPP_DASHBOARD_URL}?user_id={user.id}"
+    kb = InlineKeyboardMarkup([
+        [InlineKeyboardButton("📊 Apri Dashboard Candidati Completa", web_app=WebAppInfo(url=dash_url))]
+    ])
+
+    await update.message.reply_text(
+        f"👨‍🍳 *PANNELLO ADMIN — {len(cands)} CANDIDATI REGISTRATI CON PROFILO:*",
+        reply_markup=kb,
+        parse_mode=ParseMode.MARKDOWN
+    )
+
+    for c in cands:
+        uname = f"@{c['username']}" if c["username"] else f"ID `{c['user_id']}`"
+        name = c["first_name"] or "Candidato"
+        is_prem = db.is_user_premium(c["user_id"])
+        badge = "⭐ *PREMIUM*" if is_prem else "⚪ *BASE*"
+
+        roles = ", ".join(json.loads(c["roles"])) if c["roles"] else "Non specificato"
+        skills = ", ".join(json.loads(c["skills"])) if c["skills"] else "Nessuna"
+        phone = c["phone"] or "Non specificato"
+
+        msg = (
+            f"👤 *{name}* ({uname}) — {badge}\n"
+            f"💼 *Ruoli:* {roles}\n"
+            f"⚡ *Skill:* {skills}\n"
+            f"⏳ *Esperienza:* {c['experience'] or 'N/D'}\n"
+            f"📱 *Tel:* `{phone}`"
+        )
+        await update.message.reply_text(msg, parse_mode=ParseMode.MARKDOWN)
+
 
 
 async def cmd_broadcast_titolari(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1721,9 +1766,10 @@ def main():
     app.add_handler(CommandHandler("match", cmd_match))
     app.add_handler(CommandHandler("test_offerta", cmd_test_offerta))
 
-    # CRM Admin: Gestione Titolari & Lavoratori
+    # CRM Admin: Gestione Titolari, Lavoratori & Candidati Registrati
     app.add_handler(CommandHandler("titolari", cmd_titolari))
     app.add_handler(CommandHandler("lavoratori", cmd_lavoratori))
+    app.add_handler(CommandHandler("candidati", cmd_candidati))
     app.add_handler(CommandHandler("broadcast_titolari", cmd_broadcast_titolari))
     app.add_handler(CommandHandler("mie_offerte", cmd_mie_offerte))
     app.add_handler(CommandHandler("edit_offerta", cmd_edit_offerta))
