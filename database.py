@@ -653,3 +653,33 @@ def update_application_status(app_id: int, status: str):
         conn.execute("UPDATE applications SET status = ? WHERE app_id = ?", (status, app_id))
 
 
+def get_active_vip_jobs():
+    """Recupera tutti gli annunci VIP (vip o vip_mensile) verificati ed ancora attivi."""
+    from datetime import datetime
+    with get_conn() as conn:
+        rows = conn.execute("""
+            SELECT * FROM job_offers
+            WHERE is_verified = 1
+              AND package IN ('vip', 'vip_mensile')
+            ORDER BY created_at DESC
+        """).fetchall()
+        
+        active_jobs = []
+        now = datetime.now()
+        for r in rows:
+            created_str = r["created_at"]
+            pkg = r["package"]
+            try:
+                created_dt = datetime.strptime(created_str, "%Y-%m-%d %H:%M:%S")
+            except Exception:
+                created_dt = now
+
+            days_diff = (now - created_dt).days
+            if pkg == "vip" and days_diff <= 7:
+                active_jobs.append(dict(r))
+            elif pkg == "vip_mensile" and days_diff <= 30:
+                active_jobs.append(dict(r))
+                
+        return active_jobs
+
+

@@ -4,6 +4,7 @@ Bot principale — Offerte Lavoro Bar Torino
 
 import logging
 import json
+import asyncio
 from datetime import datetime
 
 from telegram import (
@@ -1810,8 +1811,95 @@ async def cmd_offerte(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 
+async def start_vip_autobump_loop(application: Application):
+    """Loop di background nativo che ripubblica e fissa in cima gli annunci VIP (7d e Mensili) ogni 3 ore."""
+    await asyncio.sleep(30)
+    while True:
+        try:
+            if config.GROUP_ID != 0:
+                logger.info("🔄 Esecuzione Auto-Bump triorario annunci VIP & VIP Mensile...")
+                active_vips = db.get_active_vip_jobs()
+                if active_vips:
+                    for job in active_vips:
+                        job_id = job["job_id"]
+                        pkg = job["package"]
+                        old_msg_id = job.get("message_id")
+                        business = job["business_name"]
+                        role = job["role"]
+                        zone = job["zone"]
+                        shift = job["shift"]
+                        salary = job["salary"]
+                        desc = job["description"]
+                        contact = job["contact"]
+                        user_name = job["username"]
+
+                        # 1. Elimina il vecchio post nel gruppo (se presente) per mantenere la chat pulita
+                        if old_msg_id:
+                            try:
+                                await application.bot.delete_message(chat_id=config.GROUP_ID, message_id=old_msg_id)
+                                logger.info(f"🗑️ Vecchio post #{old_msg_id} eliminato per job VIP #{job_id}")
+                            except Exception as e_del:
+                                logger.warning(f"Impossibile eliminare vecchio post #{old_msg_id} per job #{job_id}: {e_del}")
+
+                        # 2. Prepara l'header grafico in base al pacchetto
+                        if pkg == "vip":
+                            header = "👑 *SPONSOR VIP (7 GIORNI IN CIMA)* 👑"
+                        elif pkg == "vip_mensile":
+                            header = "💎 *SPONSOR VIP MENSILE (30 GIORNI IN CIMA)* 💎"
+                        else:
+                            header = "🔝 *OFFERTA IN EVIDENZA* 🔝"
+
+                        post_text = (
+                            f"{header}\n\n"
+                            f"🏪 *LOCALE:* {business.upper()}\n"
+                            f"💼 *Ruolo Cercato:* {role}\n"
+                            f"📍 *Zona:* {zone}\n"
+                            f"⏰ *Turni:* {shift}\n"
+                            f"💰 *Paga:* {salary if salary else 'Trattabile'}\n\n"
+                            f"📝 *Descrizione & Requisiti:*\n_{desc}_\n\n"
+                            f"📞 *Contatto Candidature:* {contact}\n"
+                            f"👤 *Pubblicato da:* @{user_name if user_name else 'Datore'}"
+                        )
+
+                        reply_markup = InlineKeyboardMarkup([
+                            [InlineKeyboardButton("⚡ Candidati in 1-Click", callback_data=f"apply_start:{job_id}")],
+                            [InlineKeyboardButton("📊 Apri Dashboard Candidati (Mini-App)", web_app=WebAppInfo(url=f"{config.WEBAPP_DASHBOARD_URL}?job_id={job_id}"))]
+                        ])
+
+                        # 3. Ripubblica l'annuncio in fondo alla chat del gruppo
+                        try:
+                            new_msg = await application.bot.send_message(
+                                chat_id=config.GROUP_ID,
+                                text=post_text,
+                                parse_mode=ParseMode.MARKDOWN,
+                                reply_markup=reply_markup
+                            )
+                            new_msg_id = new_msg.message_id
+                            db.update_job_offer_message_id(job_id, new_msg_id)
+
+                            # 4. Fissa l'annuncio fresco in cima al gruppo (Pin)
+                            try:
+                                await application.bot.pin_chat_message(
+                                    chat_id=config.GROUP_ID,
+                                    message_id=new_msg_id,
+                                    disable_notification=False
+                                )
+                                logger.info(f"📌 Nuovo post #{new_msg_id} pinnato in cima per job VIP #{job_id}")
+                            except Exception as e_pin:
+                                logger.warning(f"Errore pin post #{new_msg_id}: {e_pin}")
+
+                        except Exception as e_pub:
+                            logger.error(f"Errore ripubblicazione Auto-Bump per job VIP #{job_id}: {e_pub}")
+
+        except Exception as e_loop:
+            logger.error(f"Errore nel loop Auto-Bump VIP: {e_loop}")
+
+        # Attende 3 ore (10800 secondi) prima della successiva esecuzione
+        await asyncio.sleep(10800)
+
+
 async def post_init(application: Application):
-    """Configura automaticamente il menu comandi nativo di Telegram con le relative icone."""
+    """Configura automaticamente il menu comandi nativo di Telegram e avvia il loop Auto-Bump VIP."""
     commands = [
         BotCommand("registrati", "🍸 Registra / Modifica Profilo Candidato"),
         BotCommand("profilo", "👤 Il Mio Profilo & Stato Premium"),
@@ -1822,6 +1910,10 @@ async def post_init(application: Application):
     ]
     await application.bot.set_my_commands(commands)
     logger.info("✅ Menu comandi nativo Telegram impostato con successo!")
+
+    # Avvia il loop di background Auto-Bump per gli annunci VIP & VIP Mensili (ogni 3 ore)
+    asyncio.create_task(start_vip_autobump_loop(application))
+    logger.info("🚀 Loop Auto-Bump triorario per annunci VIP avviato in background!")
 
 
 # ─── Main ──────────────────────────────────────────────────────────────────────────────

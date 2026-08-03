@@ -250,14 +250,15 @@ def create_employer_pdf(filename):
     print(f"✅ Creato PDF Datori: {filename}")
 
 if __name__ == "__main__":
-    desktop_dir = "/Users/marcogiuridio/Desktop/CHAT TELEGRAM"
-    pdf_candidati = os.path.join(desktop_dir, "Guida_Candidati_Horeca_Torino.pdf")
-    pdf_datori = os.path.join(desktop_dir, "Guida_Datori_Horeca_Torino.pdf")
-    
-    create_candidate_pdf(pdf_candidati)
-    create_employer_pdf(pdf_datori)
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    webapp_dir = os.path.join(current_dir, "webapp")
 
-    # Also save inside bot/webapp directory for web serving
-    webapp_dir = "/Users/marcogiuridio/Desktop/CHAT TELEGRAM/bot/webapp"
+    desktop_dir = "/Users/marcogiuridio/Desktop/CHAT TELEGRAM"
+    if os.path.exists(desktop_dir):
+        pdf_candidati = os.path.join(desktop_dir, "Guida_Candidati_Horeca_Torino.pdf")
+        pdf_datori = os.path.join(desktop_dir, "Guida_Datori_Horeca_Torino.pdf")
+        create_candidate_pdf(pdf_candidati)
+        create_employer_pdf(pdf_datori)
+
     create_candidate_pdf(os.path.join(webapp_dir, "Guida_Candidati_Horeca_Torino.pdf"))
     create_employer_pdf(os.path.join(webapp_dir, "Guida_Datori_Horeca_Torino.pdf"))
