@@ -18,11 +18,11 @@ if RAILWAY_DOMAIN:
 else:
     BASE_WEB_URL = os.getenv("BASE_WEBAPP_URL", "https://marcogiuridio-creator.github.io/offerte-lavoro-bar-torino-bot")
 
-WEBAPP_URL = os.getenv("WEBAPP_URL", f"{BASE_WEB_URL}/webapp/index.html?v=20260803_vip")
-WEBAPP_PUBBLICA_URL = os.getenv("WEBAPP_PUBBLICA_URL", f"{BASE_WEB_URL}/webapp/pubblica.html?v=20260803_vip")
-WEBAPP_DASHBOARD_URL = os.getenv("WEBAPP_DASHBOARD_URL", f"{BASE_WEB_URL}/webapp/dashboard.html?v=20260803_vip")
-WEBAPP_MANUALE_CANDIDATI_URL = os.getenv("WEBAPP_MANUALE_CANDIDATI_URL", f"{BASE_WEB_URL}/webapp/manuale_candidati.html?v=20260803_vip")
-WEBAPP_MANUALE_DATORI_URL = os.getenv("WEBAPP_MANUALE_DATORI_URL", f"{BASE_WEB_URL}/webapp/manuale_datori.html?v=20260803_vip")
+WEBAPP_URL = os.getenv("WEBAPP_URL", f"{BASE_WEB_URL}/webapp/index.html?v=20260803_autobump")
+WEBAPP_PUBBLICA_URL = os.getenv("WEBAPP_PUBBLICA_URL", f"{BASE_WEB_URL}/webapp/pubblica.html?v=20260803_autobump")
+WEBAPP_DASHBOARD_URL = os.getenv("WEBAPP_DASHBOARD_URL", f"{BASE_WEB_URL}/webapp/dashboard.html?v=20260803_autobump")
+WEBAPP_MANUALE_CANDIDATI_URL = os.getenv("WEBAPP_MANUALE_CANDIDATI_URL", f"{BASE_WEB_URL}/webapp/manuale_candidati.html?v=20260803_autobump")
+WEBAPP_MANUALE_DATORI_URL = os.getenv("WEBAPP_MANUALE_DATORI_URL", f"{BASE_WEB_URL}/webapp/manuale_datori.html?v=20260803_autobump")
 
 
 
@@ -117,10 +117,10 @@ Aumenta la visibilità del tuo annuncio e trova subito personale qualificato a T
 • Post in evidenza + Pinnato 24h + Notifica Push istantanea ai candidati
 
 👑 *Sponsor VIP 7 Giorni (10,90€ / 500 Stelle)*
-• Post VIP + Pinnato per 7 giorni + Multi-push ai candidati registrati
+• Post VIP + Pinnato per 7 giorni + 🚀 *Auto-Bump ogni 3h* (ripubblicazione in fondo + nuovo Pin) + Multi-push
 
 💎 *Pass VIP Mensile 30 Giorni (29,90€ / 1.400 Stelle)*
-• Post VIP + Pinnato per 30 giorni + Annunci illimitati per 1 mese + Push prioritario + Badge VIP
+• Post VIP + Pinnato per 30 giorni + 🚀 *Auto-Bump ogni 3h per 1 mese intero* + Post illimitati + Push prioritario + Badge VIP
 
 📲 Pubblica direttamente via WebApp dal bot col comando `/pubblica` oppure contatta l'admin @{admin_username}
 """.strip()

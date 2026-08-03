@@ -1252,8 +1252,8 @@ async def cmd_pubblica(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Puoi scegliere tra:\n"
         "• 🆓 *Annuncio Gratuito (0€)*\n"
         "• ⭐ *In Evidenza 24h (250 Stelle / 5,39€)* — Post 🔝 + Pin 24h + Push ai candidati!\n"
-        "• 👑 *Sponsor VIP 7 Giorni (500 Stelle / 10,90€)* — Post 👑 + Pin 7d + Multi-Push!\n"
-        "• 💎 *Pass VIP Mensile (1400 Stelle / 29,90€)* — Pin 30d + Annunci illimitati + Push prioritario!\n\n"
+        "• 👑 *Sponsor VIP 7 Giorni (500 Stelle / 10,90€)* — Pin 7d + 🚀 *Auto-Bump ogni 3h* + Multi-Push!\n"
+        "• 💎 *Pass VIP Mensile (1400 Stelle / 29,90€)* — Pin 30d + 🚀 *Auto-Bump ogni 3h per 1 mese* + Post illimitati!\n\n"
         "Clicca sul pulsante qui sotto per aprire il modulo di compilazione:"
     )
     await send_smart_reply(update, context, msg, reply_markup=reply_keyboard, deep_link_arg="pubblica")
