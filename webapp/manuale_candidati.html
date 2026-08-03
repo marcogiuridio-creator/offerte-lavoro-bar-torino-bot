@@ -12,11 +12,6 @@
     :root {
       --bg-color: var(--tg-theme-bg-color, #17212b);
       --text-color: var(--tg-theme-text-color, #f5f5f5);
-      --hint-color: var(--tg-theme-hint-color, #708499);
-      --button-color: var(--tg-theme-button-color, #2481cc);
-      --secondary-bg: var(--tg-theme-secondary-bg-color, #232e3c);
-      --border-color: rgba(255, 255, 255, 0.08);
-      --gold-color: #fbc02d;
     }
 
     * {
@@ -29,80 +24,89 @@
     body {
       background-color: var(--bg-color);
       color: var(--text-color);
-      padding: 16px;
+      padding: 12px;
       padding-bottom: 40px;
       line-height: 1.6;
     }
 
-    #pdf-content {
-      width: 100%;
+    .doc-container {
+      background: #ffffff;
+      color: #111111;
+      border-radius: 16px;
+      padding: 20px;
       max-width: 800px;
       margin: 0 auto;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.2);
     }
 
     .header {
       text-align: center;
-      margin-bottom: 24px;
+      margin-bottom: 20px;
+      border-bottom: 2px solid #e0e0e0;
+      padding-bottom: 14px;
     }
 
     .header-icon {
-      font-size: 44px;
-      margin-bottom: 6px;
+      font-size: 38px;
+      margin-bottom: 4px;
     }
 
     .header h1 {
-      font-size: 22px;
+      font-size: 20px;
       font-weight: 800;
+      color: #0d47a1;
     }
 
     .header p {
       font-size: 13px;
-      color: var(--hint-color);
+      color: #555555;
       margin-top: 4px;
     }
 
     .card {
-      background: var(--secondary-bg);
-      border-radius: 16px;
-      padding: 18px;
-      margin-bottom: 16px;
-      border: 1px solid var(--border-color);
+      background: #f8f9fa;
+      border-radius: 12px;
+      padding: 14px 16px;
+      margin-bottom: 12px;
+      border: 1px solid #e0e0e0;
       page-break-inside: avoid;
       break-inside: avoid;
     }
 
     .card h2 {
-      font-size: 16px;
+      font-size: 15px;
       font-weight: 700;
-      color: #64b5f6;
-      margin-bottom: 10px;
+      color: #1976d2;
+      margin-bottom: 6px;
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 6px;
     }
 
     .card p, .card ul {
-      font-size: 14px;
-      color: var(--text-color);
+      font-size: 13.5px;
+      color: #222222;
     }
 
     .card ul {
-      padding-left: 20px;
-      margin-top: 8px;
+      padding-left: 18px;
+      margin-top: 6px;
     }
 
     .card li {
-      margin-bottom: 8px;
+      margin-bottom: 6px;
+      color: #333333;
     }
 
     .cmd-badge {
       display: inline-block;
-      background: rgba(36, 129, 204, 0.2);
-      color: #64b5f6;
+      background: #e3f2fd;
+      color: #0d47a1;
       font-family: monospace;
       font-weight: 700;
-      padding: 2px 6px;
+      padding: 2px 7px;
       border-radius: 6px;
+      border: 1px solid #bbdefb;
       margin-right: 6px;
     }
 
@@ -110,7 +114,7 @@
       display: flex;
       flex-direction: column;
       gap: 10px;
-      margin: 24px auto 0 auto;
+      margin: 20px auto 0 auto;
       max-width: 800px;
     }
 
@@ -120,8 +124,8 @@
       padding: 14px;
       border: none;
       border-radius: 12px;
-      background: var(--button-color);
-      color: #fff;
+      background: #1976d2;
+      color: #ffffff;
       font-size: 15px;
       font-weight: 700;
       text-align: center;
@@ -131,37 +135,19 @@
     }
 
     .btn-secondary {
-      background: rgba(255, 255, 255, 0.1);
-      color: var(--text-color);
-      border: 1px solid var(--border-color);
+      background: #37474f;
+      color: #ffffff;
     }
 
     @media print {
       body {
         background: #ffffff !important;
-        color: #000000 !important;
         padding: 0 !important;
-        margin: 0 !important;
       }
-      .card {
-        background: #ffffff !important;
-        border: 1px solid #dddddd !important;
-        color: #000000 !important;
-        page-break-inside: avoid !important;
-        break-inside: avoid !important;
+      .doc-container {
         box-shadow: none !important;
-        margin-bottom: 12px !important;
-      }
-      .card h2 {
-        color: #1976d2 !important;
-      }
-      .card p, .card ul, .card li {
-        color: #111111 !important;
-      }
-      .cmd-badge {
-        background: #eeeeee !important;
-        color: #1976d2 !important;
-        border: 1px solid #cccccc !important;
+        padding: 0 !important;
+        border-radius: 0 !important;
       }
       .btn-container {
         display: none !important;
@@ -171,11 +157,11 @@
 </head>
 <body>
 
-  <div id="pdf-content">
+  <div class="doc-container" id="pdf-content">
     <div class="header">
       <div class="header-icon">📖</div>
       <h1>Guida Candidati & Lavoratori</h1>
-      <p>Trova lavoro nel settore Horeca a Torino in modo semplice e veloce</p>
+      <p>Offerte Lavoro Bar Torino — Guida Ufficiale alla Candidatura</p>
     </div>
 
     <div class="card">
@@ -209,7 +195,7 @@
     </div>
 
     <div class="card">
-      <h2>🛠️ 5. Lista Completa dei Comandi</h2>
+      <h2>🛠️ 5. Lista Completa dei Comandi Telegram</h2>
       <ul>
         <li><span class="cmd-badge">/registrati</span> (o <span class="cmd-badge">/profilo</span>) ── Compila/Modifica la Scheda Profilo & Skill.</li>
         <li><span class="cmd-badge">/offerte</span> ── Consulta le ultime offerte di lavoro attive.</li>
@@ -239,10 +225,10 @@
     function generatePDF() {
       const element = document.getElementById('pdf-content');
       const opt = {
-        margin:       [10, 10, 10, 10],
+        margin:       [8, 8, 8, 8],
         filename:     'Guida_Candidati_Horeca_Torino.pdf',
         image:        { type: 'jpeg', quality: 0.98 },
-        html2canvas:  { scale: 2, useCORS: true, scrollY: 0 },
+        html2canvas:  { scale: 2, useCORS: true, backgroundColor: '#ffffff', scrollY: 0 },
         jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
         pagebreak:    { mode: ['avoid-all', 'css', 'legacy'] }
       };
