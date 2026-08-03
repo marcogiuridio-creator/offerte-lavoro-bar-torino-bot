@@ -105,6 +105,12 @@
       box-shadow: 0 4px 15px rgba(229, 57, 53, 0.25);
     }
 
+    .pkg-card.selected.pkg-vip-mensile {
+      border-color: #9c27b0;
+      background: rgba(156, 39, 176, 0.12);
+      box-shadow: 0 4px 15px rgba(156, 39, 176, 0.3);
+    }
+
     .pkg-header {
       display: flex;
       justify-content: space-between;
@@ -274,6 +280,15 @@
         </div>
         <div class="pkg-desc">✓ Pinnato in Cima per 7 Giorni<br>✓ Multi-Notifica PUSH a tutti i baristi registrati<br>✓ Garanzia di contatto o ripubblicazione gratuita.</div>
       </div>
+
+      <div class="pkg-card pkg-vip-mensile" data-pkg="vip_mensile">
+        <div class="badge-pop" style="background: linear-gradient(135deg, #8e24aa, #d81b60);">Max Risultati 💎</div>
+        <div class="pkg-header">
+          <span class="pkg-title">💎 Pass VIP Mensile (30 Giorni)</span>
+          <span class="pkg-price">1400 Stelle (29,90 €)</span>
+        </div>
+        <div class="pkg-desc">✓ Pinnato in Cima al gruppo per 30 Giorni<br>✓ Annunci e aggiornamenti illimitati per 1 mese<br>✓ Push Broadcast prioritario a tutti i candidati<br>✓ Supporto prioritario & Badge Datore VIP</div>
+      </div>
     </div>
 
     <!-- DATI DEL LOCALE E DELL'ANNUNCIO -->
@@ -377,6 +392,9 @@
         } else if (selectedPackage === 'vip') {
           submitBtn.innerText = '👑 Procedi al Pagamento VIP (500 Stelle / 10,90€)';
           submitBtn.style.background = '#e53935';
+        } else if (selectedPackage === 'vip_mensile') {
+          submitBtn.innerText = '💎 Procedi al Pagamento VIP Mensile (1400 Stelle / 29,90€)';
+          submitBtn.style.background = 'linear-gradient(135deg, #8e24aa, #d81b60)';
         }
 
         if (tg && tg.HapticFeedback) {

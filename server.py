@@ -279,7 +279,15 @@ class WebAppHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
 
                         if msg_id:
                             pkg = job["package"]
-                            header = "📢 *OFFERTA DI LAVORO*" if pkg == "free" else ("🔝 *OFFERTA IN EVIDENZA (SPONSOR 24H)* 🔝" if pkg == "evidenza" else "👑 *SPONSOR VIP (7 GIORNI IN CIMA)* 👑")
+                            if pkg == "evidenza":
+                                header = "🔝 *OFFERTA IN EVIDENZA (SPONSOR 24H)* 🔝"
+                            elif pkg == "vip":
+                                header = "👑 *SPONSOR VIP (7 GIORNI IN CIMA)* 👑"
+                            elif pkg == "vip_mensile":
+                                header = "💎 *SPONSOR VIP MENSILE (30 GIORNI IN CIMA)* 💎"
+                            else:
+                                header = "📢 *OFFERTA DI LAVORO*"
+
                             updated_text = (
                                 f"{header}\n\n"
                                 f"🏪 *LOCALE:* {job['business_name'].upper()}\n"
@@ -306,7 +314,14 @@ class WebAppHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
                                     logger.info(f"✅ Messaggio Telegram #{msg_id} modificato con successo nel gruppo per job #{job_id}")
                             except Exception as e_md:
                                 logger.warning(f"Fallback Markdown fallito per job #{job_id}: {e_md}. Invio in Plain Text...")
-                                plain_header = "📢 OFFERTA DI LAVORO" if pkg == "free" else ("🔝 OFFERTA IN EVIDENZA (SPONSOR 24H) 🔝" if pkg == "evidenza" else "👑 SPONSOR VIP (7 GIORNI IN CIMA) 👑")
+                                if pkg == "evidenza":
+                                    plain_header = "🔝 OFFERTA IN EVIDENZA (SPONSOR 24H) 🔝"
+                                elif pkg == "vip":
+                                    plain_header = "👑 SPONSOR VIP (7 GIORNI IN CIMA) 👑"
+                                elif pkg == "vip_mensile":
+                                    plain_header = "💎 SPONSOR VIP MENSILE (30 GIORNI IN CIMA) 💎"
+                                else:
+                                    plain_header = "📢 OFFERTA DI LAVORO"
                                 plain_text = (
                                     f"{plain_header}\n\n"
                                     f"LOCALE: {job['business_name'].upper()}\n"

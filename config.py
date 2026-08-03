@@ -18,9 +18,9 @@ if RAILWAY_DOMAIN:
 else:
     BASE_WEB_URL = os.getenv("BASE_WEBAPP_URL", "https://marcogiuridio-creator.github.io/offerte-lavoro-bar-torino-bot")
 
-WEBAPP_URL = os.getenv("WEBAPP_URL", f"{BASE_WEB_URL}/webapp/index.html?v=20260802_4")
-WEBAPP_PUBBLICA_URL = os.getenv("WEBAPP_PUBBLICA_URL", f"{BASE_WEB_URL}/webapp/pubblica.html?v=20260802_4")
-WEBAPP_DASHBOARD_URL = os.getenv("WEBAPP_DASHBOARD_URL", f"{BASE_WEB_URL}/webapp/dashboard.html?v=20260802_4")
+WEBAPP_URL = os.getenv("WEBAPP_URL", f"{BASE_WEB_URL}/webapp/index.html?v=20260803_vip")
+WEBAPP_PUBBLICA_URL = os.getenv("WEBAPP_PUBBLICA_URL", f"{BASE_WEB_URL}/webapp/pubblica.html?v=20260803_vip")
+WEBAPP_DASHBOARD_URL = os.getenv("WEBAPP_DASHBOARD_URL", f"{BASE_WEB_URL}/webapp/dashboard.html?v=20260803_vip")
 
 
 
@@ -107,14 +107,20 @@ Usa il formato consigliato per avere più visibilità:
 """.strip()
 
 FEATURED_INFO = """
-⭐ *Annuncio in Evidenza*
+🚀 *Pacchetti Promozionali & Visibilità per Datori di Lavoro*
 
-Il tuo post verrà *pinnato in cima al gruppo per 24 ore* con visibilità massima.
+Aumenta la visibilità del tuo annuncio e trova subito personale qualificato a Torino!
 
-💰 Costo: *5€*
-📲 Pagamento: Satispay / PayPal / Bonifico
+⭐ *In Evidenza 24 Ore (5,39€ / 250 Stelle)*
+• Post in evidenza + Pinnato 24h + Notifica Push istantanea ai candidati
 
-Scrivi a @{admin_username} per prenotare!
+👑 *Sponsor VIP 7 Giorni (10,90€ / 500 Stelle)*
+• Post VIP + Pinnato per 7 giorni + Multi-push ai candidati registrati
+
+💎 *Pass VIP Mensile 30 Giorni (29,90€ / 1.400 Stelle)*
+• Post VIP + Pinnato per 30 giorni + Annunci illimitati per 1 mese + Push prioritario + Badge VIP
+
+📲 Pubblica direttamente via WebApp dal bot col comando `/pubblica` oppure contatta l'admin @{admin_username}
 """.strip()
 
 # ─── Testo admin username ──────────────────────────────────────────────────────

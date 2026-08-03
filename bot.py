@@ -792,7 +792,14 @@ async def successful_payment_callback(update: Update, context: ContextTypes.DEFA
         desc = job.get("desc", "")
         contact = job.get("contact", "")
 
-        header = "🔝 *OFFERTA IN EVIDENZA (SPONSOR 24H)* 🔝" if pkg == "evidenza" else "👑 *SPONSOR VIP (7 GIORNI IN CIMA)* 👑"
+        if pkg == "evidenza":
+            header = "🔝 *OFFERTA IN EVIDENZA (SPONSOR 24H)* 🔝"
+        elif pkg == "vip":
+            header = "👑 *SPONSOR VIP (7 GIORNI IN CIMA)* 👑"
+        elif pkg == "vip_mensile":
+            header = "💎 *SPONSOR VIP MENSILE (30 GIORNI IN CIMA)* 💎"
+        else:
+            header = "📢 *OFFERTA DI LAVORO*"
 
         post_text = (
             f"{header}\n\n"
@@ -1195,7 +1202,8 @@ async def cmd_pubblica(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Puoi scegliere tra:\n"
         "• 🆓 *Annuncio Gratuito (0€)*\n"
         "• ⭐ *In Evidenza 24h (250 Stelle / 5,39€)* — Post 🔝 + Pin 24h + Push ai candidati!\n"
-        "• 👑 *Sponsor VIP 7 Giorni (500 Stelle / 10,90€)* — Post 👑 + Pin 7 Giorni + Multi-Push!\n\n"
+        "• 👑 *Sponsor VIP 7 Giorni (500 Stelle / 10,90€)* — Post 👑 + Pin 7d + Multi-Push!\n"
+        "• 💎 *Pass VIP Mensile (1400 Stelle / 29,90€)* — Pin 30d + Annunci illimitati + Push prioritario!\n\n"
         "Clicca sul pulsante qui sotto per aprire il modulo di compilazione:"
     )
     await send_smart_reply(update, context, msg, reply_markup=reply_keyboard, deep_link_arg="pubblica")
@@ -1310,7 +1318,7 @@ async def on_webapp_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 
-            elif pkg in ["evidenza", "vip"]:
+            elif pkg in ["evidenza", "vip", "vip_mensile"]:
                 job_id = db.create_job_offer(
                     user_id=user.id,
                     username=user.username or "",
@@ -1326,9 +1334,22 @@ async def on_webapp_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
 
                 context.user_data["pending_job"] = job_details
-                stars = 250 if pkg == "evidenza" else 500
-                eur_cents = 539 if pkg == "evidenza" else 1090
-                pkg_name = "In Evidenza 24h" if pkg == "evidenza" else "Sponsor VIP 7 Giorni"
+                if pkg == "evidenza":
+                    stars = 250
+                    eur_cents = 539
+                    pkg_name = "In Evidenza 24h"
+                elif pkg == "vip":
+                    stars = 500
+                    eur_cents = 1090
+                    pkg_name = "Sponsor VIP 7 Giorni"
+                elif pkg == "vip_mensile":
+                    stars = 1400
+                    eur_cents = 2990
+                    pkg_name = "Pass VIP Mensile (30d)"
+                else:
+                    stars = 250
+                    eur_cents = 539
+                    pkg_name = "In Evidenza"
 
                 title = f"Offerta {pkg_name} Horeca"
                 description = f"Annuncio {business} ({role} - {zone}) con Pin e Push Broadcast"
@@ -1373,7 +1394,14 @@ async def on_webapp_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 if job and job.get("message_id") and config.GROUP_ID != 0:
                     try:
                         pkg = job["package"]
-                        header = "📢 *OFFERTA DI LAVORO*" if pkg == "free" else ("🔝 *OFFERTA IN EVIDENZA (SPONSOR 24H)* 🔝" if pkg == "evidenza" else "👑 *SPONSOR VIP (7 GIORNI IN CIMA)* 👑")
+                        if pkg == "evidenza":
+                            header = "🔝 *OFFERTA IN EVIDENZA (SPONSOR 24H)* 🔝"
+                        elif pkg == "vip":
+                            header = "👑 *SPONSOR VIP (7 GIORNI IN CIMA)* 👑"
+                        elif pkg == "vip_mensile":
+                            header = "💎 *SPONSOR VIP MENSILE (30 GIORNI IN CIMA)* 💎"
+                        else:
+                            header = "📢 *OFFERTA DI LAVORO*"
                         updated_text = (
                             f"{header}\n\n"
                             f"🏪 *LOCALE:* {business.upper()}\n"
