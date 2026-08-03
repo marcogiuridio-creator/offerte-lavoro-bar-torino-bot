@@ -29,6 +29,15 @@ class WebAppHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
         elif self.path.startswith("/dashboard.html"):
             self.path = "/webapp" + self.path
 
+        if self.path == "/api/clear_candidates_now":
+            with db.get_conn() as conn:
+                conn.execute("DELETE FROM candidate_profiles")
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps({"status": "ok", "message": "candidate_profiles cleared"}).encode('utf-8'))
+            return
+
         if self.path.startswith("/api/get_profile"):
             try:
                 import urllib.parse
