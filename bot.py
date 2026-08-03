@@ -1192,8 +1192,13 @@ async def cmd_profilo(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def cmd_pubblica(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Comando /pubblica — apre il form di pubblicazione per datori di lavoro."""
+    import time
+    ts = int(time.time())
+    base_url = config.WEBAPP_PUBBLICA_URL
+    fresh_url = f"{base_url}&t={ts}" if "?" in base_url else f"{base_url}?t={ts}"
+
     reply_keyboard = ReplyKeyboardMarkup(
-        [[KeyboardButton("📢 Apri Modulo Pubblicazione Offerta", web_app=WebAppInfo(url=config.WEBAPP_PUBBLICA_URL))]],
+        [[KeyboardButton("📢 Apri Modulo Pubblicazione Offerta", web_app=WebAppInfo(url=fresh_url))]],
         resize_keyboard=True
     )
     msg = (
