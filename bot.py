@@ -550,22 +550,45 @@ async def cmd_evidenza(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def cmd_guida(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Comando /guida o /manuale — invia i link per accedere e scaricare i manuali."""
+    """Comando /guida o /manuale — invia i PDF direttamente in chat e offre le Mini App interattive."""
+    pdf_dir = os.path.join(os.path.dirname(__file__), "webapp")
+    pdf_candidati = os.path.join(pdf_dir, "Guida_Candidati_Horeca_Torino.pdf")
+    pdf_datori = os.path.join(pdf_dir, "Guida_Datori_Horeca_Torino.pdf")
+
+    try:
+        if os.path.exists(pdf_candidati):
+            with open(pdf_candidati, "rb") as f:
+                await update.effective_message.reply_document(
+                    document=f,
+                    filename="Guida_Candidati_Horeca_Torino.pdf",
+                    caption="📖 *Guida Ufficiale Candidati & Lavoratori Horeca Torino*",
+                    parse_mode=ParseMode.MARKDOWN
+                )
+        if os.path.exists(pdf_datori):
+            with open(pdf_datori, "rb") as f:
+                await update.effective_message.reply_document(
+                    document=f,
+                    filename="Guida_Datori_Horeca_Torino.pdf",
+                    caption="🏪 *Guida Ufficiale Datori di Lavoro & Titolari Horeca Torino*",
+                    parse_mode=ParseMode.MARKDOWN
+                )
+    except Exception as e:
+        logger.error(f"Errore invio file PDF: {e}")
+
     import time
     ts = int(time.time())
     url_candidati = f"{config.WEBAPP_MANUALE_CANDIDATI_URL}&t={ts}" if "?" in config.WEBAPP_MANUALE_CANDIDATI_URL else f"{config.WEBAPP_MANUALE_CANDIDATI_URL}?t={ts}"
     url_datori = f"{config.WEBAPP_MANUALE_DATORI_URL}&t={ts}" if "?" in config.WEBAPP_MANUALE_DATORI_URL else f"{config.WEBAPP_MANUALE_DATORI_URL}?t={ts}"
 
     reply_markup = InlineKeyboardMarkup([
-        [InlineKeyboardButton("📖 Guida Candidati & Lavoratori", web_app=WebAppInfo(url=url_candidati))],
-        [InlineKeyboardButton("🏪 Guida Datori di Lavoro & Titolari", web_app=WebAppInfo(url=url_datori))]
+        [InlineKeyboardButton("📖 Apri Guida Interattiva Candidati", web_app=WebAppInfo(url=url_candidati))],
+        [InlineKeyboardButton("🏪 Apri Guida Interattiva Datori", web_app=WebAppInfo(url=url_datori))]
     ])
 
     msg = (
         "📚 *MANUALI D'USO E GUIDE UFFICIALI*\n\n"
-        "Scegli la guida di tuo interesse per consultare il manuale o scaricarlo in PDF:\n\n"
-        "• 🍸 *Per Chi Cerca Lavoro*: Guida alla candidatura 1-Click, compilazione profilo e notifiche push.\n"
-        "• 🏪 *Per Titolari e Datori*: Guida alla pubblicazione annunci, scelta pacchetti e gestione Dashboard Candidati."
+        "📎 Ti abbiamo inviato i due file PDF scaricabili qui sopra!\n\n"
+        "Puoi anche consultare la versione interattiva cliccando sui pulsanti in basso."
     )
     await send_smart_reply(update, context, msg, reply_markup=reply_markup, deep_link_arg="guida")
 
