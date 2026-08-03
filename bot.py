@@ -1495,7 +1495,10 @@ async def cmd_lavoratori(update: Update, context: ContextTypes.DEFAULT_TYPE):
     for idx, d in enumerate(top_lavoratori, 1):
         name = d["first_name"] or "Utente"
         uname = f" (@{d['username']})" if d["username"] else ""
-        await update.message.reply_text("\n".join(lines), parse_mode=ParseMode.MARKDOWN)
+        lines.append(f"{idx}. *{name}*{uname}")
+
+    await update.message.reply_text("\n".join(lines), parse_mode=ParseMode.MARKDOWN)
+
 
 
 async def cmd_candidati(update: Update, context: ContextTypes.DEFAULT_TYPE):
