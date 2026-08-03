@@ -1501,6 +1501,18 @@ async def cmd_lavoratori(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 
+def parse_json_arr(val):
+    if not val:
+        return []
+    if isinstance(val, list):
+        return val
+    try:
+        res = json.loads(val)
+        return res if isinstance(res, list) else [str(res)]
+    except Exception:
+        return [str(val)]
+
+
 async def cmd_candidati(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Comando Admin: /candidati — mostra l'elenco di tutti gli utenti che hanno compilato il profilo candidato nel bot."""
     user = update.effective_user
@@ -1533,8 +1545,11 @@ async def cmd_candidati(update: Update, context: ContextTypes.DEFAULT_TYPE):
         is_prem = db.is_user_premium(c["user_id"])
         badge = "⭐ *PREMIUM*" if is_prem else "⚪ *BASE*"
 
-        roles = ", ".join(json.loads(c["roles"])) if c["roles"] else "Non specificato"
-        skills = ", ".join(json.loads(c["skills"])) if c["skills"] else "Nessuna"
+        roles_list = parse_json_arr(c["roles"])
+        skills_list = parse_json_arr(c["skills"])
+
+        roles = ", ".join(roles_list) if roles_list else "Non specificato"
+        skills = ", ".join(skills_list) if skills_list else "Nessuna"
         phone = c["phone"] or "Non specificato"
 
         msg = (
