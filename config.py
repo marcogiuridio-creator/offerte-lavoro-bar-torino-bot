@@ -21,6 +21,8 @@ else:
 WEBAPP_URL = os.getenv("WEBAPP_URL", f"{BASE_WEB_URL}/webapp/index.html?v=20260803_vip")
 WEBAPP_PUBBLICA_URL = os.getenv("WEBAPP_PUBBLICA_URL", f"{BASE_WEB_URL}/webapp/pubblica.html?v=20260803_vip")
 WEBAPP_DASHBOARD_URL = os.getenv("WEBAPP_DASHBOARD_URL", f"{BASE_WEB_URL}/webapp/dashboard.html?v=20260803_vip")
+WEBAPP_MANUALE_CANDIDATI_URL = os.getenv("WEBAPP_MANUALE_CANDIDATI_URL", f"{BASE_WEB_URL}/webapp/manuale_candidati.html?v=20260803_vip")
+WEBAPP_MANUALE_DATORI_URL = os.getenv("WEBAPP_MANUALE_DATORI_URL", f"{BASE_WEB_URL}/webapp/manuale_datori.html?v=20260803_vip")
 
 
 

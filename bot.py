@@ -549,6 +549,27 @@ async def cmd_evidenza(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await send_smart_reply(update, context, msg, deep_link_arg="evidenza")
 
 
+async def cmd_guida(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Comando /guida o /manuale — invia i link per accedere e scaricare i manuali."""
+    import time
+    ts = int(time.time())
+    url_candidati = f"{config.WEBAPP_MANUALE_CANDIDATI_URL}&t={ts}" if "?" in config.WEBAPP_MANUALE_CANDIDATI_URL else f"{config.WEBAPP_MANUALE_CANDIDATI_URL}?t={ts}"
+    url_datori = f"{config.WEBAPP_MANUALE_DATORI_URL}&t={ts}" if "?" in config.WEBAPP_MANUALE_DATORI_URL else f"{config.WEBAPP_MANUALE_DATORI_URL}?t={ts}"
+
+    reply_markup = InlineKeyboardMarkup([
+        [InlineKeyboardButton("📖 Guida Candidati & Lavoratori", web_app=WebAppInfo(url=url_candidati))],
+        [InlineKeyboardButton("🏪 Guida Datori di Lavoro & Titolari", web_app=WebAppInfo(url=url_datori))]
+    ])
+
+    msg = (
+        "📚 *MANUALI D'USO E GUIDE UFFICIALI*\n\n"
+        "Scegli la guida di tuo interesse per consultare il manuale o scaricarlo in PDF:\n\n"
+        "• 🍸 *Per Chi Cerca Lavoro*: Guida alla candidatura 1-Click, compilazione profilo e notifiche push.\n"
+        "• 🏪 *Per Titolari e Datori*: Guida alla pubblicazione annunci, scelta pacchetti e gestione Dashboard Candidati."
+    )
+    await send_smart_reply(update, context, msg, reply_markup=reply_markup, deep_link_arg="guida")
+
+
 
 async def cmd_match(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Comando /match [testo] — analizza il testo e mostra i candidati in target."""
@@ -1807,6 +1828,8 @@ def main():
     app.add_handler(CommandHandler("regole", cmd_regole))
     app.add_handler(CommandHandler("formato", cmd_formato))
     app.add_handler(CommandHandler("evidenza", cmd_evidenza))
+    app.add_handler(CommandHandler("guida", cmd_guida))
+    app.add_handler(CommandHandler("manuale", cmd_guida))
     app.add_handler(CommandHandler("registrati", cmd_registrati))
     app.add_handler(CommandHandler("pubblica", cmd_pubblica))
     app.add_handler(CommandHandler("offerta", cmd_pubblica))

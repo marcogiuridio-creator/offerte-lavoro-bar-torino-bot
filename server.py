@@ -28,6 +28,10 @@ class WebAppHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
             self.path = "/webapp" + self.path
         elif self.path.startswith("/dashboard.html"):
             self.path = "/webapp" + self.path
+        elif self.path.startswith("/manuale_candidati.html"):
+            self.path = "/webapp" + self.path
+        elif self.path.startswith("/manuale_datori.html"):
+            self.path = "/webapp" + self.path
 
         if self.path.startswith("/api/clear_candidates_now"):
             with db.get_conn() as conn:

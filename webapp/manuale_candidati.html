@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Guida Candidati — Offerte Lavoro Bar Torino</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+    :root {
+      --bg-color: var(--tg-theme-bg-color, #17212b);
+      --text-color: var(--tg-theme-text-color, #f5f5f5);
+      --hint-color: var(--tg-theme-hint-color, #708499);
+      --button-color: var(--tg-theme-button-color, #2481cc);
+      --secondary-bg: var(--tg-theme-secondary-bg-color, #232e3c);
+      --border-color: rgba(255, 255, 255, 0.08);
+      --gold-color: #fbc02d;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+
+    body {
+      background-color: var(--bg-color);
+      color: var(--text-color);
+      padding: 16px;
+      padding-bottom: 40px;
+      line-height: 1.6;
+    }
+
+    .header {
+      text-align: center;
+      margin-bottom: 24px;
+    }
+
+    .header-icon {
+      font-size: 44px;
+      margin-bottom: 6px;
+    }
+
+    .header h1 {
+      font-size: 22px;
+      font-weight: 800;
+    }
+
+    .header p {
+      font-size: 13px;
+      color: var(--hint-color);
+      margin-top: 4px;
+    }
+
+    .card {
+      background: var(--secondary-bg);
+      border-radius: 16px;
+      padding: 18px;
+      margin-bottom: 16px;
+      border: 1px solid var(--border-color);
+    }
+
+    .card h2 {
+      font-size: 16px;
+      font-weight: 700;
+      color: #64b5f6;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .card p, .card ul {
+      font-size: 14px;
+      color: var(--text-color);
+    }
+
+    .card ul {
+      padding-left: 20px;
+      margin-top: 8px;
+    }
+
+    .card li {
+      margin-bottom: 6px;
+    }
+
+    .btn-action {
+      display: block;
+      width: 100%;
+      padding: 14px;
+      border: none;
+      border-radius: 12px;
+      background: var(--button-color);
+      color: #fff;
+      font-size: 15px;
+      font-weight: 700;
+      text-align: center;
+      cursor: pointer;
+      margin-top: 20px;
+      text-decoration: none;
+    }
+
+    @media print {
+      body { background: #fff; color: #000; padding: 20px; }
+      .card { background: #f9f9f9; border: 1px solid #ccc; color: #000; }
+      .btn-action { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <div class="header-icon">📖</div>
+    <h1>Guida Candidati & Lavoratori</h1>
+    <p>Trova lavoro nel settore Horeca a Torino in modo semplice e veloce</p>
+  </div>
+
+  <div class="card">
+    <h2>🎯 1. Cos'è la Community</h2>
+    <p>Offerte Lavoro Bar Torino è la prima community Telegram a Torino con <strong>9.000+ iscritti</strong> attiva ogni giorno per far incontrare baristi, camerieri, cuochi e titolari di locali.</p>
+  </div>
+
+  <div class="card">
+    <h2>⚡ 2. Candidati in 1-Click</h2>
+    <ul>
+      <li>Sfoglia le offerte nel gruppo Telegram.</li>
+      <li>Clicca su <strong>"⚡ Candidati in 1-Click"</strong> sotto l'annuncio.</li>
+      <li>Rispondi a 2 veloci domande di pre-screening nel bot.</li>
+      <li>La tua scheda completa viene inviata direttamente al titolare!</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h2>🍸 3. Scheda Profilo & Skill</h2>
+    <p>Registra il tuo profilo per ricevere proposte mirate:</p>
+    <ul>
+      <li>Usa il comando <strong>/registrati</strong> o <strong>/profilo</strong>.</li>
+      <li>Seleziona i tuoi ruoli, le competenze (HACCP, Caffetteria, Mixology, Cassa) e le zone preferite di Torino.</li>
+      <li>Salva le modifiche: i titolari potranno trovarti nella loro Dashboard!</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h2>🔔 4. Notifiche Push Istantanee</h2>
+    <p>Quando un locale pubblica un annuncio prioritario nella tua zona, il bot ti avvisa subito in privato prima che il post vada disperso!</p>
+  </div>
+
+  <button class="btn-action" onclick="window.print()">📥 Stampa / Salva in PDF</button>
+
+</body>
+</html>
