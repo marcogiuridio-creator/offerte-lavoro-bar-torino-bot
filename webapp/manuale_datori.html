@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <title>Guida Datori di Lavoro — Offerte Lavoro Bar Torino</title>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
@@ -86,6 +87,13 @@
       margin-bottom: 6px;
     }
 
+    .btn-container {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-top: 24px;
+    }
+
     .btn-action {
       display: block;
       width: 100%;
@@ -98,54 +106,101 @@
       font-weight: 700;
       text-align: center;
       cursor: pointer;
-      margin-top: 20px;
       text-decoration: none;
+      transition: opacity 0.2s;
+    }
+
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.1);
+      color: var(--text-color);
+      border: 1px solid var(--border-color);
     }
 
     @media print {
       body { background: #fff; color: #000; padding: 20px; }
       .card { background: #f9f9f9; border: 1px solid #ccc; color: #000; }
-      .btn-action { display: none; }
+      .btn-container { display: none; }
     }
   </style>
 </head>
 <body>
 
-  <div class="header">
-    <div class="header-icon">🏪</div>
-    <h1>Guida Datori di Lavoro</h1>
-    <p>Trova staff qualificato per il tuo bar o ristorante a Torino</p>
+  <div id="pdf-content">
+    <div class="header">
+      <div class="header-icon">🏪</div>
+      <h1>Guida Datori di Lavoro</h1>
+      <p>Trova staff qualificato per il tuo bar o ristorante a Torino</p>
+    </div>
+
+    <div class="card">
+      <h2>📢 1. Pubblica un'Offerta</h2>
+      <ul>
+        <li>Digita <strong>/pubblica</strong> col bot o clicca su "Apri Modulo Pubblicazione".</li>
+        <li>Scegli tra i livelli di visibilità:
+          <br>• 🆓 <strong>Gratuito (0€)</strong>: Post standard nel gruppo.
+          <br>• ⭐ <strong>In Evidenza 24h (5,39€)</strong>: Post 🔝 + Pin 24h + Push istantanea.
+          <br>• 👑 <strong>Sponsor VIP 7d (10,90€)</strong>: Pin 7 giorni + Multi-push.
+          <br>• 💎 <strong>Pass VIP Mensile (29,90€)</strong>: Pin 30 giorni + Post illimitati per 1 mese + Push prioritario.
+        </li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <h2>📊 2. Dashboard Candidati</h2>
+      <p>Con i pacchetti Evidenza e VIP sblocchi la Dashboard Candidati:</p>
+      <ul>
+        <li>Visualizza i profili qualificati in target con la tua ricerca.</li>
+        <li>Filtra per competenze (Caffetteria, Mixology, HACCP, Lingue).</li>
+        <li>Contatta i candidati con 1-Click via Telegram o WhatsApp.</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <h2>✏️ 3. Sincronizzazione ed Editing</h2>
+      <p>Usa il comando <strong>/mie_offerte</strong> per modificare retribuzioni o dettagli: la modifica aggiornerà istantaneamente anche il post nel gruppo Telegram!</p>
+    </div>
   </div>
 
-  <div class="card">
-    <h2>📢 1. Pubblica un'Offerta</h2>
-    <ul>
-      <li>Digita <strong>/pubblica</strong> col bot o clicca su "Apri Modulo Pubblicazione".</li>
-      <li>Scegli tra i livelli di visibilità:
-        <br>• 🆓 <strong>Gratuito (0€)</strong>: Post standard nel gruppo.
-        <br>• ⭐ <strong>In Evidenza 24h (5,39€)</strong>: Post 🔝 + Pin 24h + Push istantanea.
-        <br>• 👑 <strong>Sponsor VIP 7d (10,90€)</strong>: Pin 7 giorni + Multi-push.
-        <br>• 💎 <strong>Pass VIP Mensile (29,90€)</strong>: Pin 30 giorni + Post illimitati per 1 mese + Push prioritario.
-      </li>
-    </ul>
+  <div class="btn-container">
+    <button class="btn-action" onclick="generatePDF()">📥 Scarica Guida PDF</button>
+    <button class="btn-action btn-secondary" onclick="openExternalBrowser()">🌐 Apri nel Browser per Stampare</button>
   </div>
 
-  <div class="card">
-    <h2>📊 2. Dashboard Candidati</h2>
-    <p>Con i pacchetti Evidenza e VIP sblocchi la Dashboard Candidati:</p>
-    <ul>
-      <li>Visualizza i profili qualificati in target con la tua ricerca.</li>
-      <li>Filtra per competenze (Caffetteria, Mixology, HACCP, Lingue).</li>
-      <li>Contatta i candidati con 1-Click via Telegram o WhatsApp.</li>
-    </ul>
-  </div>
+  <script>
+    const tg = window.Telegram ? window.Telegram.WebApp : null;
+    if (tg) {
+      tg.expand();
+      tg.ready();
+    }
 
-  <div class="card">
-    <h2>✏️ 3. Sincronizzazione ed Editing</h2>
-    <p>Usa il comando <strong>/mie_offerte</strong> per modificare retribuzioni o dettagli: la modifica aggiornerà istantaneamente anche il post nel gruppo Telegram!</p>
-  </div>
+    function generatePDF() {
+      const element = document.getElementById('pdf-content');
+      const opt = {
+        margin:       10,
+        filename:     'Guida_Datori_Horeca_Torino.pdf',
+        image:        { type: 'jpeg', quality: 0.98 },
+        html2canvas:  { scale: 2, backgroundColor: '#17212b' },
+        jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+      };
 
-  <button class="btn-action" onclick="window.print()">📥 Stampa / Salva in PDF</button>
+      if (window.html2pdf) {
+        window.html2pdf().set(opt).from(element).save().catch(err => {
+          console.error("html2pdf failed:", err);
+          openExternalBrowser();
+        });
+      } else {
+        openExternalBrowser();
+      }
+    }
 
+    function openExternalBrowser() {
+      const currentUrl = window.location.href;
+      if (tg && tg.openLink) {
+        tg.openLink(currentUrl);
+      } else {
+        window.print();
+      }
+    }
+  </script>
 </body>
 </html>
