@@ -68,6 +68,63 @@ def get_text(message) -> str:
     return message.text or message.caption or ""
 
 
+MANUAL_OFFER_INVITE = """📢 Vuoi dare più visibilità al tuo annuncio?
+
+Abbiamo visto che hai pubblicato un’offerta di lavoro direttamente nella chat.
+
+Puoi continuare a farlo, ma utilizzando il bot puoi rendere il tuo annuncio molto più efficace. 🚀
+
+Con il bot puoi:
+
+🎯 raggiungere candidati compatibili con il ruolo che stai cercando
+📍 selezionare zona, posizione e requisiti
+⭐ comparire tra le offerte organizzate e facilmente consultabili
+🔔 raggiungere direttamente gli utenti Premium compatibili, che ricevono una notifica privata
+
+👉 Pubblica la tua offerta tramite il bot per aumentare le possibilità di trovare la persona giusta.
+
+Scrivi /pubblica per iniziare."""
+
+
+async def invite_manual_offer_author(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Invita l'autore di un'offerta manuale a ripubblicarla tramite il bot."""
+    msg = update.message
+    user = update.effective_user
+    if not msg or not user:
+        return
+
+    try:
+        await context.bot.send_message(chat_id=user.id, text=MANUAL_OFFER_INVITE)
+        logger.info(f"📩 Invito /pubblica inviato in privato a {user.id}")
+        return
+    except Exception as e:
+        logger.info(f"Invio privato non disponibile per {user.id}; uso il fallback nel gruppo: {e}")
+
+    try:
+        bot_info = await context.bot.get_me()
+        deep_link = f"https://t.me/{bot_info.username}?start=pubblica"
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("📢 Pubblica con il bot", url=deep_link)]
+        ])
+        temp_msg = await context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text="📢 Per dare più visibilità a questo annuncio, pubblicalo anche tramite il bot.",
+            reply_to_message_id=msg.message_id,
+            reply_markup=keyboard,
+        )
+
+        async def delete_temp_reply():
+            await asyncio.sleep(15)
+            try:
+                await temp_msg.delete()
+            except Exception as e:
+                logger.warning(f"Impossibile eliminare il fallback temporaneo: {e}")
+
+        asyncio.create_task(delete_temp_reply())
+    except Exception as e:
+        logger.warning(f"Impossibile mostrare il fallback per l'offerta manuale di {user.id}: {e}")
+
+
 # ─── Handler: nuovo membro ─────────────────────────────────────────────────────
 
 async def on_new_member(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -115,6 +172,9 @@ async def on_group_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Analizza ogni messaggio nel gruppo."""
     msg = update.message
     if not msg or not msg.from_user:
+        return
+
+    if update.effective_chat.type not in ("group", "supergroup"):
         return
 
     user = msg.from_user
@@ -236,17 +296,12 @@ async def on_group_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         emoji = get_category_emoji(category)
         logger.info(f"{emoji} {format_category_label(category)} da {user.first_name}: {text[:60]}...")
 
-        # ── FASE 2: Matching Automatico & Notifiche Smart ──
+        # Le offerte scritte manualmente restano nel gruppo e nel CRM, ma non
+        # generano notifiche Premium. Le notifiche sono riservate al flusso
+        # strutturato avviato con /pubblica.
         if category == "OFFERTA":
-            import asyncio
-            import matcher
-            asyncio.create_task(matcher.notify_matched_candidates(
-                context.bot,
-                text,
-                user.username or "",
-                msg.message_id
-            ))
-            logger.info("🎯 Task notifiche smart avviato per nuova offerta di lavoro!")
+            await invite_manual_offer_author(update, context)
+            logger.info("📢 Offerta manuale registrata senza notifiche Premium")
 
 
 
