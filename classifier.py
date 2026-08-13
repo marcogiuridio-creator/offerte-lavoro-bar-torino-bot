@@ -14,7 +14,7 @@ OFFERTA_KEYWORDS = [
     "posto disponibile", "figura professionale", "candidarsi", "inviare cv",
     "mandare cv", "mandatemi cv", "contattate in privato", "contattami in privato",
     "zona torino", "bar torino", "caffetteria torino", "ristorante torino",
-    "locale cerca", "assumo", "cerco barista", "cerco cameriere", "cerco cuoco",
+    "locale cerca", "assumo", "assume", "cerco barista", "cerco cameriere", "cerco cuoco",
     "cerco aiuto", "cerco lavapiatti", "cerco extra", "disponibilità immediata",
     "retribuzione", "stipendio da concordare", "pagamento", "compenso",
     "contratto offerto", "possibilità di crescita",
@@ -34,6 +34,26 @@ RICHIESTA_KEYWORDS = [
     "disponibile per extra", "disponibile per turni", "zona preferita",
     "disponibile a torino", "abito a torino", "vivo a torino",
     "recapito", "numero di telefono", "whatsapp",
+    "cerco impiego", "cerco occupazione", "cerco un lavoro", "cercando lavoro",
+    "in cerca di lavoro", "valuto proposte", "valuto offerte", "posso iniziare",
+    "libero per lavorare", "libera per lavorare", "qualcuno cerca un",
+    "qualcuno cerca una", "qualche locale assume", "locali che cercano personale",
+    "avete bisogno di personale", "dove posso mandare il curriculum",
+    "looking for a job", "looking for work", "available for work", "i am available",
+    "i'm available", "busco trabajo", "busco empleo", "estoy disponible",
+    "disponible para trabajar",
+]
+
+# Forme brevi o con piccoli errori comuni. Richiedono un contesto personale o
+# professionale per evitare di confondere le offerte dei datori con le ricerche.
+RICHIESTA_PATTERNS = [
+    r"\b(?:cerco|cercando|cerc[oa])\s+(?:un\s+)?lavor\w*\b",
+    r"\b(?:sono|sn)\s+dispon\w*\b",
+    r"\bdispon\w*\s+(?:da\s+subito|immediat\w*|(?:per|x)\s+(?:extra|turni|lavorare)|come\s+\w+)",
+    r"\b(?:barista|camerier\w*|cuoc\w*|lavapiatt\w*|banconist\w*|pizzaiol\w*|chef)\s+(?:con\s+esperienza\s+)?(?:cerca\w*\s+lavor\w*|dispon+ibil\w*)",
+    r"\b(?:qualcuno|qualche\s+locale)\s+(?:cerca|assume|ha\s+bisogno)\b",
+    r"\b(?:i['’]?m|i\s+am)\s+(?:looking\s+for\s+(?:a\s+)?(?:job|work)|available)\b",
+    r"\b(?:busco|estoy\s+buscando)\s+(?:trabajo|empleo)\b",
 ]
 
 # ─── Pattern spam ──────────────────────────────────────────────────────────────
@@ -73,6 +93,19 @@ def classify(text: str) -> str:
 
     text_lower = text.lower()
 
+    # Le formule esplicite del datore hanno priorità: una vera offerta può
+    # contenere "disponibile da subito" riferito alla persona ricercata.
+    candidate_question = any(kw in text_lower for kw in (
+        "qualcuno cerca", "sapete se", "qualche locale assume",
+        "conoscete locali", "ci sono offerte", "avete bisogno di personale",
+        "dove posso mandare",
+    ))
+    employer_intent = not candidate_question and any(kw in text_lower for kw in (
+        "cerchiamo", "ricerchiamo", "selezioniamo", "assumiamo", "assume",
+        "cercasi", "si cerca", "stiamo cercando", "siamo alla ricerca",
+        "offerta di lavoro", "offerta lavoro", "posizione aperta",
+    ))
+
     # 1. Controlla spam
     for pattern in SPAM_PATTERNS:
         if re.search(pattern, text_lower):
@@ -87,8 +120,11 @@ def classify(text: str) -> str:
 
     # 3. Conta keyword richiesta
     richiesta_count = sum(1 for kw in RICHIESTA_KEYWORDS if kw in text_lower)
+    richiesta_count += sum(1 for pattern in RICHIESTA_PATTERNS if re.search(pattern, text_lower))
 
     # 4. Classifica in base ai conteggi
+    if employer_intent and offerta_count >= OFFERTA_THRESHOLD:
+        return "OFFERTA"
     if offerta_count >= OFFERTA_THRESHOLD and offerta_count > richiesta_count:
         return "OFFERTA"
     elif richiesta_count >= RICHIESTA_THRESHOLD:

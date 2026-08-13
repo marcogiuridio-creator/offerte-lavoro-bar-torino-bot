@@ -5,6 +5,7 @@ Bot principale — Offerte Lavoro Bar Torino
 import logging
 import json
 import asyncio
+import re
 from datetime import datetime
 
 from telegram import (
@@ -68,6 +69,12 @@ def get_text(message) -> str:
     return message.text or message.caption or ""
 
 
+def classify_group_text(text: str) -> str:
+    """Classifica il contenuto ignorando gli URL, gestiti da una regola separata."""
+    classification_text = re.sub(r"https?://\S+|www\.\S+\.\S+", " ", text)
+    return classify(classification_text)
+
+
 MANUAL_OFFER_INVITE = """📢 Vuoi dare più visibilità al tuo annuncio?
 
 Abbiamo visto che hai pubblicato un’offerta di lavoro direttamente nella chat.
@@ -123,6 +130,89 @@ async def invite_manual_offer_author(update: Update, context: ContextTypes.DEFAU
         asyncio.create_task(delete_temp_reply())
     except Exception as e:
         logger.warning(f"Impossibile mostrare il fallback per l'offerta manuale di {user.id}: {e}")
+
+
+def candidate_search_invite(user_id: int):
+    """Restituisce testo e pulsanti adatti allo stato del candidato."""
+    profile = db.get_candidate_profile(user_id)
+    is_premium = db.is_user_premium(user_id) if profile else False
+
+    if is_premium:
+        text = (
+            "⭐ Il tuo profilo Premium è già attivo.\n\n"
+            "Nel gruppo non sono ammessi annunci personali di ricerca lavoro, per questo il tuo messaggio è stato rimosso.\n\n"
+            "Non è necessario pubblicare annunci personali: riceverai direttamente dal bot le offerte compatibili. "
+            "Controlla che disponibilità, ruoli e zone siano aggiornati."
+        )
+        buttons = [[InlineKeyboardButton("👤 Aggiorna il profilo", callback_data="candidate_profile")]]
+        return text, InlineKeyboardMarkup(buttons), "premium"
+
+    if profile:
+        text = (
+            "👋 Il tuo messaggio di ricerca lavoro è stato rimosso perché nel gruppo sono ammesse soltanto offerte pubblicate dai datori.\n\n"
+            "Il tuo profilo candidato Base è già registrato. Controlla che ruolo, disponibilità, zone ed esperienza siano aggiornati.\n\n"
+            "Con Premium ricevi in privato le offerte compatibili e il tuo profilo viene mostrato prima ai titolari."
+        )
+        buttons = [
+            [InlineKeyboardButton("👤 Controlla il profilo", callback_data="candidate_profile")],
+            [InlineKeyboardButton("⭐ Scopri Premium", callback_data="candidate_premium")],
+        ]
+        return text, InlineKeyboardMarkup(buttons), "base"
+
+    text = (
+        "👋 Stai cercando lavoro nel settore bar e ristorazione?\n\n"
+        "Nel gruppo non sono ammessi annunci personali di ricerca lavoro, per questo il tuo messaggio è stato rimosso.\n\n"
+        "Puoi creare gratuitamente il tuo profilo candidato sul bot. Inserisci ruoli, competenze, esperienza, zone di Torino, disponibilità e contatti.\n\n"
+        "La registrazione Base è gratuita. Con Premium ricevi anche le offerte compatibili in privato e il tuo profilo viene mostrato prima ai titolari."
+    )
+    buttons = [
+        [InlineKeyboardButton("✅ Registrati gratis", callback_data="candidate_register")],
+        [InlineKeyboardButton("⭐ Scopri Premium", callback_data="candidate_premium")],
+    ]
+    return text, InlineKeyboardMarkup(buttons), "unregistered"
+
+
+async def redirect_candidate_search(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Rimuove una ricerca di lavoro e indirizza l'autore al profilo candidato."""
+    msg = update.message
+    user = update.effective_user
+    if not msg or not user:
+        return
+
+    try:
+        await msg.delete()
+    except Exception as e:
+        logger.warning(f"Impossibile eliminare la ricerca lavoro {msg.message_id}: {e}")
+
+    text, keyboard, candidate_state = candidate_search_invite(user.id)
+    try:
+        await context.bot.send_message(chat_id=user.id, text=text, reply_markup=keyboard)
+        logger.info(f"📩 Ricerca lavoro rimossa; invito candidato {candidate_state} inviato a {user.id}")
+        return
+    except Exception as e:
+        logger.info(f"Privato non disponibile per candidato {user.id}; uso fallback: {e}")
+
+    try:
+        bot_info = await context.bot.get_me()
+        deep_link = f"https://t.me/{bot_info.username}?start=registrati"
+        temp_msg = await context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text="👋 Il tuo annuncio di ricerca lavoro è stato rimosso. Registrati gratuitamente come candidato per essere trovato dai titolari.",
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("✅ Registrati come candidato", url=deep_link)
+            ]]),
+        )
+
+        async def delete_temp_candidate_reply():
+            await asyncio.sleep(15)
+            try:
+                await temp_msg.delete()
+            except Exception as e:
+                logger.warning(f"Impossibile eliminare il fallback candidato: {e}")
+
+        asyncio.create_task(delete_temp_candidate_reply())
+    except Exception as e:
+        logger.warning(f"Impossibile mostrare fallback candidato per {user.id}: {e}")
 
 
 # ─── Handler: nuovo membro ─────────────────────────────────────────────────────
@@ -198,8 +288,13 @@ async def on_group_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Messaggio senza testo (foto, sticker, ecc.) → ignora
         return
 
+    # I link sono valutati separatamente: rimuoverli temporaneamente permette
+    # di riconoscere frasi come "cerco lavoro, ecco il mio CV https://...".
+    category = classify_group_text(text)
+
     # ── 2. Controlla link esterni ──
-    if has_external_link(text):
+    # Una ricerca lavoro con link al CV segue comunque il percorso candidati.
+    if has_external_link(text) and category != "RICHIESTA":
         db.record_spam_blocked()
         # Notifica l'admin con bottoni Approva/Rifiuta
         chat_id   = msg.chat_id
@@ -240,8 +335,6 @@ async def on_group_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     # ── 3. Classifica il messaggio ──
-    category = classify(text)
-
     # ── 4. Spam rilevato ──
     if category == "SPAM":
         await msg.delete()
@@ -302,6 +395,8 @@ async def on_group_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if category == "OFFERTA":
             await invite_manual_offer_author(update, context)
             logger.info("📢 Offerta manuale registrata senza notifiche Premium")
+        elif category == "RICHIESTA":
+            await redirect_candidate_search(update, context)
 
 
 
@@ -778,6 +873,35 @@ async def cmd_premium(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
     await send_smart_reply(update, context, msg, reply_markup=keyboard, deep_link_arg="premium")
+
+
+async def on_candidate_redirect(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Gestisce i pulsanti inviati dopo la rimozione di una ricerca lavoro."""
+    query = update.callback_query
+    await query.answer()
+    user = update.effective_user
+
+    if query.data in ("candidate_register", "candidate_profile"):
+        webapp_user_url = f"{config.WEBAPP_URL}&user_id={user.id}" if "?" in config.WEBAPP_URL else f"{config.WEBAPP_URL}?user_id={user.id}"
+        label = "✏️ Apri e aggiorna il profilo" if query.data == "candidate_profile" else "✅ Crea il profilo gratuito"
+        await context.bot.send_message(
+            chat_id=user.id,
+            text="Apri la scheda candidato per completare o aggiornare ruoli, competenze, zone e disponibilità.",
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton(label, web_app=WebAppInfo(url=webapp_user_url))
+            ]]),
+        )
+        return
+
+    if query.data == "candidate_premium":
+        await context.bot.send_message(
+            chat_id=user.id,
+            text=(
+                "⭐ Candidato Premium — 2,19 € al mese\n\n"
+                "Ricevi in privato le offerte compatibili e il tuo profilo viene mostrato prima ai titolari.\n\n"
+                "Usa /premium per vedere i metodi di attivazione."
+            ),
+        )
 
 
 async def on_payment_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -2032,6 +2156,7 @@ def main():
     # Approvazione link e pagamenti (callback dei bottoni inline)
     app.add_handler(CallbackQueryHandler(on_link_approval, pattern="^link_"))
     app.add_handler(CallbackQueryHandler(on_payment_button, pattern="^pay_"))
+    app.add_handler(CallbackQueryHandler(on_candidate_redirect, pattern="^candidate_"))
 
     # Candidature 1-Click e Pre-Screening (Stile Restworld)
     app.add_handler(CallbackQueryHandler(on_candidate_apply_start, pattern="^apply_start:"))
