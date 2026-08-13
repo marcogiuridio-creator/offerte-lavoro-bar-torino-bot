@@ -42,11 +42,12 @@ Siamo la più grande community Horeca di Torino con oltre **9.000 professionisti
 
 📌 *REGOLE FONDAMENTALI DEL GRUPPO:*
 
-1️⃣ **Solo annunci HORECA**: Pubblica esclusivamente offerte o ricerche di lavoro per bar, ristoranti, pizzerie, catering e locali a Torino e provincia.
-2️⃣ **Limite messaggi**: Massimo *2 annunci al giorno* per utente (intervallo minimo di 6 ore tra i post).
-3️⃣ **Moderazione Link**: I link a siti esterni sono bloccati per sicurezza e richiedono l'approvazione dell'amministratore.
-4️⃣ **Annunci chiari**: Scrivi testi dettagliati di almeno 5 caratteri spiegando ruolo, zona e contatti.
-5️⃣ **Rispetto ed Educazione**: Vietati insulti, spam, catene, vendita prodotti o offerte di guadagno online.
+1️⃣ **Solo offerte HORECA**: Nel gruppo possono pubblicare annunci i datori che cercano personale per bar, ristoranti, pizzerie, catering e locali a Torino e provincia.
+2️⃣ **Cerchi lavoro?** Non pubblicare annunci personali: registrati gratuitamente come candidato con `/registrati`.
+3️⃣ **Limite messaggi**: Massimo *2 offerte al giorno* per utente (intervallo minimo di 6 ore tra i post).
+4️⃣ **Moderazione Link**: I link a siti esterni sono bloccati per sicurezza e richiedono l'approvazione dell'amministratore.
+5️⃣ **Annunci chiari**: Scrivi testi dettagliati spiegando ruolo, zona e contatti.
+6️⃣ **Rispetto ed Educazione**: Vietati insulti, spam, catene, vendita prodotti o offerte di guadagno online.
 
 ━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -63,7 +64,7 @@ Puoi usare questi comandi sia nel gruppo che in privato col bot:
 
 📝 *FORMATO CONSIGLIATO PER GLI ANNUNCI:*
 
-🏷️ OFFERTA / RICERCA
+🏷️ OFFERTA DI LAVORO
 💼 Ruolo: (es. Barista / Cameriere / Cuoco)
 📍 Zona: (quartiere/zona di Torino)
 ⏰ Turni: (Full-time / Part-time / Extra / Notturno)
@@ -100,7 +101,7 @@ SHORT_MESSAGE_WARNING = """
 Usa il formato consigliato per avere più visibilità:
 
 ```
-🏷️ OFFERTA / RICERCA
+🏷️ OFFERTA DI LAVORO
 💼 Ruolo:
 📍 Zona:
 ⏰ Contratto:

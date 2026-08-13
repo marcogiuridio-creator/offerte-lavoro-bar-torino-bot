@@ -6,7 +6,8 @@ import logging
 import json
 import asyncio
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 
 from telegram import (
     Update,
@@ -667,12 +668,17 @@ async def cmd_regole(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Comando /regole — mostra le regole."""
     rules = (
         "📋 *Regole del gruppo — Offerte Lavoro Bar Torino*\n\n"
-        "1️⃣ Solo annunci di lavoro nel settore bar/ristorazione a Torino\n"
-        "2️⃣ Max *2 annunci al giorno* per utente\n"
-        "3️⃣ Niente link esterni, spam o pubblicità\n"
-        "4️⃣ Indica sempre zona e tipo di contratto\n"
-        "5️⃣ Rispetta gli altri membri\n\n"
-        "Per info sugli annunci in evidenza: /evidenza"
+        "🏪 *DATORI DI LAVORO*\n"
+        "Nel gruppo sono ammesse offerte Horeca per Torino e provincia. Indica ruolo, zona, turni, contratto e contatto. Puoi pubblicare in modo organizzato con /pubblica.\n\n"
+        "👤 *CANDIDATI*\n"
+        "Non pubblicare messaggi come “cerco lavoro” o “sono disponibile”: vengono rimossi. Crea gratuitamente il profilo con /registrati per essere trovato dai titolari e candidarti alle offerte.\n\n"
+        "⭐ *PREMIUM*\n"
+        "Con /premium ricevi in privato le offerte compatibili e compari prima nelle ricerche dei titolari.\n\n"
+        "📌 *REGOLE GENERALI*\n"
+        "• Massimo *2 offerte al giorno* per utente, distanziate di almeno 6 ore\n"
+        "• Niente link esterni non autorizzati, spam o pubblicità\n"
+        "• Rispetta gli altri membri e pubblica informazioni chiare e veritiere\n\n"
+        "🔝 Per promuovere un’offerta: /evidenza"
     )
     await send_smart_reply(update, context, rules, deep_link_arg="regole")
 
@@ -682,7 +688,7 @@ async def cmd_formato(update: Update, context: ContextTypes.DEFAULT_TYPE):
     fmt = (
         "📝 *Formato consigliato per gli annunci:*\n\n"
         "```\n"
-        "🏷️ OFFERTA / RICERCA\n"
+        "🏷️ OFFERTA DI LAVORO\n"
         "💼 Ruolo: (es. Barista, Cameriere, Cuoco)\n"
         "📍 Zona: (quartiere/zona di Torino)\n"
         "⏰ Contratto: (Full-time / Part-time / Extra)\n"
@@ -1990,6 +1996,82 @@ async def cmd_offerte(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 
+DAILY_RULES_SUMMARY = (
+    "📌 *COME FUNZIONA IL GRUPPO*\n\n"
+    "🏪 *CERCHI PERSONALE?*\n"
+    "Puoi pubblicare un’offerta Horeca nel gruppo. Con /pubblica organizzi meglio l’annuncio e puoi raggiungere i candidati compatibili.\n\n"
+    "👤 *CERCHI LAVORO?*\n"
+    "Non pubblicare annunci personali nel gruppo. Registrati gratuitamente con /registrati: i titolari potranno trovare il tuo profilo e potrai candidarti alle offerte.\n\n"
+    "⭐ *CANDIDATO PREMIUM*\n"
+    "Ricevi in privato le offerte compatibili e compari prima nelle ricerche dei titolari. Informazioni: /premium\n\n"
+    "📖 Leggi tutte le regole con /regole"
+)
+
+
+def seconds_until_daily_summary(now=None) -> float:
+    """Secondi mancanti alle 11:00 Europe/Rome successive."""
+    rome = ZoneInfo("Europe/Rome")
+    current = now.astimezone(rome) if now else datetime.now(rome)
+    target = current.replace(hour=11, minute=0, second=0, microsecond=0)
+    if target <= current:
+        target += timedelta(days=1)
+    return (target - current).total_seconds()
+
+
+async def publish_daily_rules_summary(application: Application):
+    """Sostituisce il riepilogo precedente, pubblica e fissa quello aggiornato."""
+    if not config.GROUP_ID:
+        logger.warning("Riepilogo regole non pubblicato: GROUP_ID non configurato")
+        return None
+
+    bot_info = await application.bot.get_me()
+    bot_url = f"https://t.me/{bot_info.username}"
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("🏪 Pubblica un’offerta", url=f"{bot_url}?start=pubblica")],
+        [InlineKeyboardButton("👤 Registrati gratis", url=f"{bot_url}?start=registrati")],
+        [InlineKeyboardButton("⭐ Scopri Premium", url=f"{bot_url}?start=premium")],
+        [InlineKeyboardButton("📖 Regole complete", url=f"{bot_url}?start=regole")],
+    ])
+
+    previous_id = db.get_setting("daily_rules_message_id")
+    if previous_id:
+        try:
+            await application.bot.delete_message(chat_id=config.GROUP_ID, message_id=int(previous_id))
+        except Exception as e:
+            logger.info(f"Riepilogo precedente già assente o non eliminabile: {e}")
+
+    message = await application.bot.send_message(
+        chat_id=config.GROUP_ID,
+        text=DAILY_RULES_SUMMARY,
+        parse_mode=ParseMode.MARKDOWN,
+        reply_markup=keyboard,
+        disable_notification=True,
+    )
+    db.set_setting("daily_rules_message_id", message.message_id)
+    try:
+        await application.bot.pin_chat_message(
+            chat_id=config.GROUP_ID,
+            message_id=message.message_id,
+            disable_notification=True,
+        )
+    except Exception as e:
+        logger.warning(f"Riepilogo pubblicato ma non fissato: {e}")
+    logger.info(f"📌 Riepilogo giornaliero regole pubblicato e fissato: {message.message_id}")
+    return message
+
+
+async def start_daily_rules_loop(application: Application):
+    """Pubblica il riepilogo ogni giorno alle 11:00 ora italiana."""
+    while True:
+        delay = seconds_until_daily_summary()
+        logger.info(f"⏰ Prossimo riepilogo regole tra {int(delay)} secondi")
+        await asyncio.sleep(delay)
+        try:
+            await publish_daily_rules_summary(application)
+        except Exception as e:
+            logger.error(f"Errore pubblicazione riepilogo giornaliero: {e}")
+
+
 async def start_vip_autobump_loop(application: Application):
     """Loop di background nativo che ripubblica e fissa in cima gli annunci VIP (7d e Mensili) ogni 3 ore."""
     await asyncio.sleep(30)
@@ -2078,7 +2160,7 @@ async def start_vip_autobump_loop(application: Application):
 
 
 async def post_init(application: Application):
-    """Configura automaticamente il menu comandi nativo di Telegram e avvia il loop Auto-Bump VIP."""
+    """Configura menu e processi periodici del bot."""
     commands = [
         BotCommand("registrati", "🍸 Registra / Modifica Profilo Candidato"),
         BotCommand("profilo", "👤 Il Mio Profilo & Stato Premium"),
@@ -2093,6 +2175,9 @@ async def post_init(application: Application):
     # Avvia il loop di background Auto-Bump per gli annunci VIP & VIP Mensili (ogni 3 ore)
     asyncio.create_task(start_vip_autobump_loop(application))
     logger.info("🚀 Loop Auto-Bump triorario per annunci VIP avviato in background!")
+
+    asyncio.create_task(start_daily_rules_loop(application))
+    logger.info("📌 Riepilogo regole giornaliero programmato alle 11:00 Europe/Rome!")
 
 
 # ─── Main ──────────────────────────────────────────────────────────────────────────────

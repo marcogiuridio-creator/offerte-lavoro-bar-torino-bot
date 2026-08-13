@@ -52,6 +52,11 @@ def init_db():
             spam_blocked INTEGER DEFAULT 0
         );
 
+        CREATE TABLE IF NOT EXISTS bot_settings (
+            key   TEXT PRIMARY KEY,
+            value TEXT
+        );
+
         CREATE TABLE IF NOT EXISTS candidate_profiles (
             user_id         INTEGER PRIMARY KEY,
             username        TEXT,
@@ -184,6 +189,22 @@ def init_db():
                         c.get("bio", ""), c.get("is_premium", 0)
                     ))
                 print(f"🌱 Auto-seed candidati completato: {len(seed_cands_data)} profili importati da seed_candidates.json")
+
+
+def get_setting(key: str, default=None):
+    """Recupera una piccola impostazione persistente del bot."""
+    with get_conn() as conn:
+        row = conn.execute("SELECT value FROM bot_settings WHERE key = ?", (key,)).fetchone()
+    return row["value"] if row else default
+
+
+def set_setting(key: str, value):
+    """Salva una piccola impostazione persistente del bot."""
+    with get_conn() as conn:
+        conn.execute("""
+            INSERT INTO bot_settings (key, value) VALUES (?, ?)
+            ON CONFLICT(key) DO UPDATE SET value = excluded.value
+        """, (key, str(value)))
 
 
 
@@ -681,5 +702,3 @@ def get_active_vip_jobs():
                 active_jobs.append(dict(r))
                 
         return active_jobs
-
-
