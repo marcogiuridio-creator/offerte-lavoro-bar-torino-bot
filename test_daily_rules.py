@@ -47,9 +47,17 @@ class DailyRulesPublishTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_first_start_publishes_rules_when_no_message_is_saved(self):
         application = SimpleNamespace(bot=SimpleNamespace(set_my_commands=AsyncMock()))
-        with patch("bot.start_vip_autobump_loop"), patch("bot.start_daily_rules_loop"), patch("bot.asyncio.create_task"), patch("bot.db.get_setting", return_value=None), patch("bot.publish_daily_rules_summary", new=AsyncMock()) as publish:
+        created_coroutines = []
+
+        def close_background(coro):
+            created_coroutines.append(coro)
+            coro.close()
+            return SimpleNamespace()
+
+        with patch("bot.asyncio.create_task", side_effect=close_background), patch("bot.db.get_setting", return_value=None), patch("bot.publish_daily_rules_summary", new=AsyncMock()) as publish:
             await bot.post_init(application)
         publish.assert_awaited_once_with(application)
+        self.assertEqual(len(created_coroutines), 2)
 
 
 if __name__ == "__main__":
