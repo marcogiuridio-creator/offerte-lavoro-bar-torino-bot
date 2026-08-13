@@ -45,6 +45,12 @@ class DailyRulesPublishTests(unittest.IsolatedAsyncioTestCase):
             disable_notification=True,
         )
 
+    async def test_first_start_publishes_rules_when_no_message_is_saved(self):
+        application = SimpleNamespace(bot=SimpleNamespace(set_my_commands=AsyncMock()))
+        with patch("bot.start_vip_autobump_loop"), patch("bot.start_daily_rules_loop"), patch("bot.asyncio.create_task"), patch("bot.db.get_setting", return_value=None), patch("bot.publish_daily_rules_summary", new=AsyncMock()) as publish:
+            await bot.post_init(application)
+        publish.assert_awaited_once_with(application)
+
 
 if __name__ == "__main__":
     unittest.main()

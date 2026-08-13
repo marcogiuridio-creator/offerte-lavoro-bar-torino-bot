@@ -2179,6 +2179,15 @@ async def post_init(application: Application):
     asyncio.create_task(start_daily_rules_loop(application))
     logger.info("📌 Riepilogo regole giornaliero programmato alle 11:00 Europe/Rome!")
 
+    # Alla prima attivazione pubblica subito il post permanente delle regole.
+    # L'ID salvato evita duplicati ai successivi riavvii; il ciclo giornaliero
+    # lo sostituirà regolarmente alle 11:00.
+    if not db.get_setting("daily_rules_message_id"):
+        try:
+            await publish_daily_rules_summary(application)
+        except Exception as e:
+            logger.error(f"Impossibile pubblicare il primo post delle regole: {e}")
+
 
 # ─── Main ──────────────────────────────────────────────────────────────────────────────
 
