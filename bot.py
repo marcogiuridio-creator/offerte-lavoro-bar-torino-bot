@@ -6,6 +6,7 @@ import logging
 import json
 import asyncio
 import re
+from urllib.parse import urlencode
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
@@ -37,6 +38,7 @@ from telegram.constants import ParseMode
 import config
 import database as db
 import server
+import matcher
 from classifier import classify, has_external_link, get_category_emoji, format_category_label
 
 
@@ -76,22 +78,50 @@ def classify_group_text(text: str) -> str:
     return classify(classification_text)
 
 
-MANUAL_OFFER_INVITE = """📢 Vuoi dare più visibilità al tuo annuncio?
+MANUAL_OFFER_INVITE = """📢 Il tuo annuncio è stato pubblicato correttamente.
 
-Abbiamo visto che hai pubblicato un’offerta di lavoro direttamente nella chat.
+Vuoi ricevere candidature più organizzate?
 
-Puoi continuare a farlo, ma utilizzando il bot puoi rendere il tuo annuncio molto più efficace. 🚀
+Trasformalo gratuitamente in un’offerta completa:
 
-Con il bot puoi:
+🎯 raggiungi i candidati compatibili
+📩 ricevi candidature con un clic
+📊 gestisci i candidati dalla dashboard
+⭐ ottieni un annuncio ordinato e più riconoscibile
 
-🎯 raggiungere candidati compatibili con il ruolo che stai cercando
-📍 selezionare zona, posizione e requisiti
-⭐ comparire tra le offerte organizzate e facilmente consultabili
-🔔 raggiungere direttamente gli utenti Premium compatibili, che ricevono una notifica privata
+I dati che abbiamo riconosciuto sono già inseriti. Devi solo controllarli, aggiungere il nome del locale e confermare."""
 
-👉 Pubblica la tua offerta tramite il bot per aumentare le possibilità di trovare la persona giusta.
 
-Scrivi /pubblica per iniziare."""
+def build_manual_offer_prefill_url(text: str, user) -> str:
+    """Crea l'URL del modulo con i dati riconosciuti nell'annuncio manuale."""
+    extracted = matcher.extract_job_details(text)
+    role_map = {
+        "Bartender": "Bartender / Barman",
+        "Cuoco": "Cuoco / Aiuto Cuoco",
+        "Aiuto Cuoco": "Cuoco / Aiuto Cuoco",
+        "Responsabile": "Responsabile Bar/Sala",
+    }
+    zone_map = {
+        "Lingotto": "Lingotto / Mirafiori",
+        "Mirafiori": "Lingotto / Mirafiori",
+        "San Donato": "San Donato / Cit Turin",
+        "Cit Turin": "San Donato / Cit Turin",
+    }
+    shift_map = {"Turni Notturni": "Turno Serale / Notturno"}
+    role = extracted["roles"][0] if extracted["roles"] else ""
+    zone = extracted["zones"][0] if extracted["zones"] else ""
+    shift = extracted["availability"][0] if extracted["availability"] else ""
+    params = {
+        "prefill": "manual",
+        "user_id": user.id,
+        "role": role_map.get(role, role),
+        "zone": zone_map.get(zone, zone),
+        "shift": shift_map.get(shift, shift),
+        "description": text[:1000],
+        "contact": f"@{user.username}" if user.username else "",
+    }
+    separator = "&" if "?" in config.WEBAPP_PUBBLICA_URL else "?"
+    return f"{config.WEBAPP_PUBBLICA_URL}{separator}{urlencode(params)}"
 
 
 async def invite_manual_offer_author(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -101,8 +131,19 @@ async def invite_manual_offer_author(update: Update, context: ContextTypes.DEFAU
     if not msg or not user:
         return
 
+    prefilled_url = build_manual_offer_prefill_url(get_text(msg), user)
+    keyboard = InlineKeyboardMarkup([[
+        InlineKeyboardButton(
+            "🚀 Completa gratuitamente l’annuncio",
+            web_app=WebAppInfo(url=prefilled_url),
+        )
+    ]])
     try:
-        await context.bot.send_message(chat_id=user.id, text=MANUAL_OFFER_INVITE)
+        await context.bot.send_message(
+            chat_id=user.id,
+            text=MANUAL_OFFER_INVITE,
+            reply_markup=keyboard,
+        )
         logger.info(f"📩 Invito /pubblica inviato in privato a {user.id}")
         return
     except Exception as e:
@@ -111,14 +152,14 @@ async def invite_manual_offer_author(update: Update, context: ContextTypes.DEFAU
     try:
         bot_info = await context.bot.get_me()
         deep_link = f"https://t.me/{bot_info.username}?start=pubblica"
-        keyboard = InlineKeyboardMarkup([
+        fallback_keyboard = InlineKeyboardMarkup([
             [InlineKeyboardButton("📢 Pubblica con il bot", url=deep_link)]
         ])
         temp_msg = await context.bot.send_message(
             chat_id=update.effective_chat.id,
             text="📢 Per dare più visibilità a questo annuncio, pubblicalo anche tramite il bot.",
             reply_to_message_id=msg.message_id,
-            reply_markup=keyboard,
+            reply_markup=fallback_keyboard,
         )
 
         async def delete_temp_reply():
@@ -1444,6 +1485,46 @@ async def cmd_pubblica(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await send_smart_reply(update, context, msg, reply_markup=reply_keyboard, deep_link_arg="pubblica")
 
 
+async def send_free_employer_preview(context, user, job_id: int, post_text: str):
+    """Mostra gratuitamente un'anteprima dei match e l'accesso alla dashboard."""
+    matches = matcher.get_matching_candidates(post_text, min_score=60)
+    dashboard_url = f"{config.WEBAPP_DASHBOARD_URL}?job_id={job_id}&user_id={user.id}"
+    if matches:
+        lines = []
+        for candidate in matches[:3]:
+            roles = candidate.get("roles") or "[]"
+            try:
+                role_label = ", ".join(json.loads(roles)) or "Profilo Horeca"
+            except Exception:
+                role_label = "Profilo Horeca"
+            premium_badge = "⭐" if db.is_user_premium(candidate["user_id"]) else "👤"
+            lines.append(
+                f"{premium_badge} {candidate.get('first_name') or 'Candidato'} — "
+                f"{role_label} — affinità {candidate['match_score']}%"
+            )
+        preview = "\n".join(lines)
+        text = (
+            f"🎯 *ANTEPRIMA GRATUITA CANDIDATI COMPATIBILI*\n\n"
+            f"Abbiamo trovato *{len(matches)} profili* compatibili con l’offerta `#{job_id}`.\n\n"
+            f"{preview}\n\n"
+            "Apri la dashboard per consultare e gestire le candidature."
+        )
+    else:
+        text = (
+            f"📊 *DASHBOARD ATTIVA PER L’OFFERTA #{job_id}*\n\n"
+            "Al momento non risultano profili sopra la soglia di compatibilità. "
+            "La dashboard raccoglierà le candidature ricevute."
+        )
+    await context.bot.send_message(
+        chat_id=user.id,
+        text=text,
+        parse_mode=ParseMode.MARKDOWN,
+        reply_markup=InlineKeyboardMarkup([[
+            InlineKeyboardButton("📊 Apri Dashboard Candidati", web_app=WebAppInfo(url=dashboard_url))
+        ]]),
+    )
+
+
 async def on_webapp_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Riceve i dati inviati dalla Telegram WebApp."""
     user = update.effective_user
@@ -1524,7 +1605,8 @@ async def on_webapp_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
 
                 post_text = (
-                    f"📢 *OFFERTA DI LAVORO — {business.upper()}*\n\n"
+                    f"✅ *OFFERTA ORGANIZZATA CON IL BOT*\n"
+                    f"🏪 *{business.upper()}*\n\n"
                     f"💼 *Ruolo Cercato:* {role}\n"
                     f"📍 *Zona:* {zone}\n"
                     f"⏰ *Turni:* {shift}\n"
@@ -1533,20 +1615,40 @@ async def on_webapp_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     f"📞 *Contatto Candidature:* {contact}\n"
                     f"👤 *Pubblicato da:* @{user.username if user.username else user.first_name}"
                 )
+                pub_msg = None
                 if config.GROUP_ID != 0:
                     try:
+                        offer_keyboard = InlineKeyboardMarkup([
+                            [InlineKeyboardButton("📩 Candidati in 1-Click", callback_data=f"apply_start:{job_id}")],
+                            [InlineKeyboardButton(
+                                "📊 Dashboard Candidati",
+                                url=f"{config.WEBAPP_DASHBOARD_URL}?job_id={job_id}&user_id={user.id}",
+                            )],
+                        ])
                         pub_msg = await context.bot.send_message(
                             chat_id=config.GROUP_ID,
                             text=post_text,
-                            parse_mode=ParseMode.MARKDOWN
+                            parse_mode=ParseMode.MARKDOWN,
+                            reply_markup=offer_keyboard,
                         )
                         db.update_job_offer_message_id(job_id, pub_msg.message_id)
                     except Exception as e:
                         logger.error(f"Errore pubblicazione gruppo: {e}")
 
+                if pub_msg:
+                    await matcher.notify_matched_candidates(
+                        context.bot,
+                        post_text,
+                        user.username or "",
+                        pub_msg.message_id,
+                        job_id=job_id,
+                    )
+                await send_free_employer_preview(context, user, job_id, post_text)
+
                 await update.effective_message.reply_text(
                     "✅ *ANNUNCIO GRATUITO PUBBLICATO!*\n\n"
                     f"Il tuo annuncio `#{job_id}` è stato pubblicato nel gruppo.\n\n"
+                    "🎯 Il matching candidati e la dashboard sono già attivi gratuitamente.\n\n"
                     "💡 *Puoi modificarlo o rivederlo in qualsiasi momento digitando `/mie_offerte`!*",
                     parse_mode=ParseMode.MARKDOWN
                 )

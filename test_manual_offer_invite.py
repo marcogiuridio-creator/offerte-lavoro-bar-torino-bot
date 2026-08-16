@@ -1,5 +1,6 @@
 import asyncio
 import unittest
+from urllib.parse import parse_qs, urlparse
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
@@ -7,8 +8,12 @@ import bot
 
 
 def make_update():
-    message = SimpleNamespace(message_id=321)
-    user = SimpleNamespace(id=12345)
+    message = SimpleNamespace(
+        message_id=321,
+        text="Cercasi barista full-time in centro con esperienza",
+        caption=None,
+    )
+    user = SimpleNamespace(id=12345, username="datoretorino")
     chat = SimpleNamespace(id=-100987, type="supergroup")
     return SimpleNamespace(message=message, effective_user=user, effective_chat=chat)
 
@@ -23,11 +28,29 @@ class ManualOfferInviteTests(unittest.IsolatedAsyncioTestCase):
 
         await bot.invite_manual_offer_author(make_update(), context)
 
-        telegram_bot.send_message.assert_awaited_once_with(
-            chat_id=12345,
-            text=bot.MANUAL_OFFER_INVITE,
-        )
+        telegram_bot.send_message.assert_awaited_once()
+        private_call = telegram_bot.send_message.await_args
+        self.assertEqual(private_call.kwargs["chat_id"], 12345)
+        self.assertEqual(private_call.kwargs["text"], bot.MANUAL_OFFER_INVITE)
+        button = private_call.kwargs["reply_markup"].inline_keyboard[0][0]
+        self.assertEqual(button.text, "🚀 Completa gratuitamente l’annuncio")
+        params = parse_qs(urlparse(button.web_app.url).query)
+        self.assertEqual(params["prefill"], ["manual"])
+        self.assertEqual(params["role"], ["Barista"])
+        self.assertEqual(params["zone"], ["Centro"])
+        self.assertEqual(params["shift"], ["Full-time"])
+        self.assertEqual(params["contact"], ["@datoretorino"])
         telegram_bot.get_me.assert_not_awaited()
+
+    def test_prefill_maps_combined_form_options(self):
+        user = SimpleNamespace(id=55, username="locale")
+        url = bot.build_manual_offer_prefill_url(
+            "Cerchiamo aiuto cuoco serale a San Donato", user
+        )
+        params = parse_qs(urlparse(url).query)
+        self.assertEqual(params["role"], ["Cuoco / Aiuto Cuoco"])
+        self.assertEqual(params["zone"], ["San Donato / Cit Turin"])
+        self.assertEqual(params["shift"], ["Turno Serale / Notturno"])
 
     async def test_failed_private_invite_posts_temporary_deep_link_reply(self):
         temp_message = SimpleNamespace(delete=AsyncMock())

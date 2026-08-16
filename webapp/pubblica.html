@@ -491,6 +491,31 @@
 
     let editingJobId = null;
 
+    function loadManualOfferPrefill() {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('prefill') !== 'manual') return;
+
+      document.querySelector('.header h1').innerText = '🚀 Completa la tua Offerta';
+      document.querySelector('.header p').innerText = 'Abbiamo già inserito i dati riconosciuti: controllali e conferma gratuitamente';
+      document.getElementById('submitBtn').innerText = '✅ CONFERMA E PUBBLICA GRATIS';
+
+      const values = {
+        roleSelect: params.get('role'),
+        zoneSelect: params.get('zone'),
+        shiftSelect: params.get('shift'),
+        descriptionInput: params.get('description'),
+        contactInput: params.get('contact')
+      };
+      Object.entries(values).forEach(([id, value]) => {
+        if (!value) return;
+        const field = document.getElementById(id);
+        if (field && (field.tagName !== 'SELECT' || Array.from(field.options).some(option => option.value === value))) {
+          field.value = value;
+        }
+      });
+      document.getElementById('businessName').focus();
+    }
+
     async function loadExistingJobOffer() {
       const fullUrl = window.location.href;
       const match = fullUrl.match(/[?&](?:edit_job_id|job_id)=(\d+)/);
@@ -525,6 +550,7 @@
       }
     }
 
+    loadManualOfferPrefill();
     loadExistingJobOffer();
 
     document.getElementById('submitBtn').addEventListener('click', submitJob);
