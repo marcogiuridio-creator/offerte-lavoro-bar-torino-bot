@@ -6,6 +6,10 @@ import logging
 import json
 import urllib.request
 import urllib.parse
+import hashlib
+import hmac
+import time
+from typing import Optional
 
 import config
 import database as db
@@ -14,18 +18,73 @@ logger = logging.getLogger(__name__)
 
 
 BOT_DIR = os.path.dirname(__file__)
+WEBAPP_DIR = os.path.join(BOT_DIR, "webapp")
+MAX_REQUEST_BODY = 64 * 1024
+MAX_INIT_DATA_AGE = 15 * 60
+
+
+def escape_telegram_markdown(value):
+    return str(value or "").translate(str.maketrans({"_": "\\_", "*": "\\*", "[": "\\[", "`": "\\`"}))
+
+
+def validate_telegram_init_data(init_data: str, now: Optional[int] = None):
+    """Validate Telegram WebApp initData and return the authenticated user."""
+    if not init_data or not config.BOT_TOKEN:
+        return None
+    values = urllib.parse.parse_qsl(init_data, keep_blank_values=True)
+    supplied_hash = next((value for key, value in values if key == "hash"), "")
+    if not supplied_hash:
+        return None
+    data_check = "\n".join(f"{key}={value}" for key, value in sorted(values) if key != "hash")
+    secret = hmac.new(b"WebAppData", config.BOT_TOKEN.encode(), hashlib.sha256).digest()
+    expected = hmac.new(secret, data_check.encode(), hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(expected, supplied_hash):
+        return None
+    parsed = dict(values)
+    try:
+        auth_date = int(parsed.get("auth_date", "0"))
+        if abs((now or int(time.time())) - auth_date) > MAX_INIT_DATA_AGE:
+            return None
+        user = json.loads(parsed.get("user", "{}"))
+        user["id"] = int(user["id"])
+        return user
+    except (TypeError, ValueError, KeyError, json.JSONDecodeError):
+        return None
 
 
 class WebAppHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
-        super().__init__(*args, directory=BOT_DIR, **kwargs)
+        super().__init__(*args, directory=WEBAPP_DIR, **kwargs)
+
+    def _json(self, status, payload):
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("Content-Security-Policy", "default-src 'self' https://telegram.org; script-src 'self' 'unsafe-inline' https://telegram.org; style-src 'self' 'unsafe-inline'; connect-src 'self'; frame-ancestors https://web.telegram.org https://*.telegram.org")
+        self.end_headers()
+        self.wfile.write(json.dumps(payload).encode("utf-8"))
+
+    def _principal(self):
+        return validate_telegram_init_data(self.headers.get("X-Telegram-Init-Data", ""))
+
+    def _read_json(self):
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+        except ValueError:
+            raise ValueError("invalid content length")
+        if length <= 0 or length > MAX_REQUEST_BODY:
+            raise ValueError("request body too large or empty")
+        return json.loads(self.rfile.read(length).decode("utf-8"))
 
     def do_GET(self):
+        if self.path.startswith("/webapp/"):
+            self.path = self.path[len("/webapp"):]
         # Se la richiesta chiama direttamente /index.html, /pubblica.html, /dashboard.html, reindirizza a /webapp/
         if self.path in ("/", "/index.html"):
-            self.path = "/webapp/index.html"
+            self.path = "/index.html"
         elif self.path.startswith("/pubblica.html"):
-            self.path = "/webapp" + self.path
+            self.path = self.path
         elif self.path.startswith("/dashboard.html"):
             self.path = "/webapp" + self.path
         elif self.path.startswith("/manuale_candidati.html"):
@@ -33,21 +92,17 @@ class WebAppHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
         elif self.path.startswith("/manuale_datori.html"):
             self.path = "/webapp" + self.path
 
-        if self.path.startswith("/api/clear_candidates_now"):
-            with db.get_conn() as conn:
-                conn.execute("DELETE FROM candidate_profiles")
-            self.send_response(200)
-            self.send_header('Content-Type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps({"status": "ok", "message": "candidate_profiles cleared"}).encode('utf-8'))
-            return
-
         if self.path.startswith("/api/get_profile"):
             try:
                 import urllib.parse
                 parsed = urllib.parse.urlparse(self.path)
                 params = urllib.parse.parse_qs(parsed.query)
-                user_id = int(params.get("user_id", [0])[0])
+                principal = self._principal()
+                if not principal:
+                    return self._json(401, {"status": "error", "error": "unauthorized"})
+                user_id = int(params.get("user_id", [principal["id"]])[0])
+                if user_id != principal["id"] and principal["id"] not in config.ADMIN_IDS:
+                    return self._json(403, {"status": "error", "error": "forbidden"})
 
                 profile = db.get_candidate_profile(user_id)
                 if profile:
@@ -70,12 +125,7 @@ class WebAppHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
                 else:
                     res = {"status": "not_found"}
 
-                self.send_response(200)
-                self.send_header('Content-Type', 'application/json')
-                self.send_header('Access-Control-Allow-Origin', '*')
-                self.end_headers()
-                self.wfile.write(json.dumps(res).encode('utf-8'))
-                return
+                return self._json(200, res)
             except Exception as e:
                 logger.error(f"Errore GET profile API: {e}")
 
@@ -84,11 +134,14 @@ class WebAppHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
                 import urllib.parse
                 parsed = urllib.parse.urlparse(self.path)
                 params = urllib.parse.parse_qs(parsed.query)
+                principal = self._principal()
+                if not principal:
+                    return self._json(401, {"status": "error", "error": "unauthorized"})
                 job_id = int(params.get("job_id", [0])[0])
 
                 job = db.get_job_offer(job_id) if job_id > 0 else None
 
-                if job:
+                if job and (job["user_id"] == principal["id"] or principal["id"] in config.ADMIN_IDS):
                     res = {
                         "status": "ok",
                         "job": {
@@ -109,12 +162,7 @@ class WebAppHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
                 else:
                     res = {"status": "not_found"}
 
-                self.send_response(200)
-                self.send_header('Content-Type', 'application/json')
-                self.send_header('Access-Control-Allow-Origin', '*')
-                self.end_headers()
-                self.wfile.write(json.dumps(res).encode('utf-8'))
-                return
+                return self._json(200, res)
             except Exception as e:
                 logger.error(f"Errore GET job_offer API: {e}")
 
@@ -125,12 +173,15 @@ class WebAppHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
                 import urllib.parse
                 parsed = urllib.parse.urlparse(self.path)
                 params = urllib.parse.parse_qs(parsed.query)
+                principal = self._principal()
+                if not principal:
+                    return self._json(401, {"status": "error", "error": "unauthorized"})
                 job_id = int(params.get("job_id", [0])[0])
 
                 job = db.get_job_offer(job_id)
                 candidates_res = []
 
-                if job:
+                if job and (job["user_id"] == principal["id"] or principal["id"] in config.ADMIN_IDS):
                     import matcher
                     job_text = f"{job['business_name']} - {job['role']} {job['description']}"
                     matches = matcher.get_matching_candidates(job_text, min_score=40)
@@ -170,24 +221,22 @@ class WebAppHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
                     ))
 
 
-                self.send_response(200)
-                self.send_header('Content-Type', 'application/json')
-                self.send_header('Access-Control-Allow-Origin', '*')
-                self.end_headers()
-                self.wfile.write(json.dumps({"status": "ok", "candidates": candidates_res}).encode('utf-8'))
-                return
+                return self._json(200, {"status": "ok", "candidates": candidates_res})
             except Exception as e:
                 logger.error(f"Errore GET candidati API: {e}")
 
+        if self.path.startswith("/api/"):
+            return self._json(404, {"status": "error", "error": "not_found"})
         super().do_GET()
 
     def do_POST(self):
         if self.path == "/api/save_profile":
-            content_length = int(self.headers.get('Content-Length', 0))
-            post_data = self.rfile.read(content_length)
             try:
-                data = json.loads(post_data.decode('utf-8'))
-                user_id = data.get("user_id")
+                principal = self._principal()
+                if not principal:
+                    return self._json(401, {"status": "error", "error": "unauthorized"})
+                data = self._read_json()
+                user_id = principal["id"]
                 if user_id:
                     roles = json.dumps(data.get("roles", []))
                     skills = json.dumps(data.get("skills", []))
@@ -199,8 +248,8 @@ class WebAppHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
 
                     db.save_candidate_profile(
                         user_id=int(user_id),
-                        username=data.get("username", ""),
-                        first_name=data.get("first_name", ""),
+                        username=principal.get("username", ""),
+                        first_name=principal.get("first_name", ""),
                         roles=roles,
                         skills=skills,
                         experience=experience,
@@ -224,13 +273,14 @@ class WebAppHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
             return
 
         elif self.path == "/api/update_application_status":
-            content_length = int(self.headers.get('Content-Length', 0))
-            post_data = self.rfile.read(content_length)
             try:
-                data = json.loads(post_data.decode('utf-8'))
+                principal = self._principal()
+                if not principal:
+                    return self._json(401, {"status": "error", "error": "unauthorized"})
+                data = self._read_json()
                 app_id = data.get("app_id")
                 new_status = data.get("status")
-                if app_id and new_status:
+                if app_id and new_status in {"interview", "rejected"} and db.application_owned_by(int(app_id), principal["id"]):
                     db.update_application_status(int(app_id), str(new_status))
                     self.send_response(200)
                     self.send_header('Content-Type', 'application/json')
@@ -245,16 +295,19 @@ class WebAppHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
             return
 
         elif self.path.startswith("/api/update_job_offer"):
-            content_length = int(self.headers.get('Content-Length', 0))
-            post_data = self.rfile.read(content_length)
             try:
-                data = json.loads(post_data.decode('utf-8'))
+                principal = self._principal()
+                if not principal:
+                    return self._json(401, {"status": "error", "error": "unauthorized"})
+                data = self._read_json()
                 job_id = data.get("job_id")
                 if job_id:
                     job_id = int(job_id)
                     existing_job = db.get_job_offer(job_id)
                     if not existing_job:
                         raise ValueError(f"Offerta #{job_id} inesistente")
+                    if existing_job["user_id"] != principal["id"] and principal["id"] not in config.ADMIN_IDS:
+                        return self._json(403, {"status": "error", "error": "forbidden"})
                     db.update_job_offer(
                         job_id=job_id,
                         business_name=data.get("business_name", ""),
@@ -290,8 +343,8 @@ class WebAppHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
                                     if chat_data.get("ok") and "pinned_message" in chat_data["result"]:
                                         msg_id = chat_data["result"]["pinned_message"]["message_id"]
                                         db.update_job_offer_message_id(job_id, msg_id)
-                            except Exception as e_p:
-                                logger.warning(f"Impossibile recuperare pinned_message via HTTP: {e_p}")
+                            except Exception:
+                                logger.warning("Impossibile recuperare pinned_message via HTTP")
 
                         if msg_id:
                             pkg = job["package"]
@@ -306,13 +359,13 @@ class WebAppHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
 
                             updated_text = (
                                 f"{header}\n\n"
-                                f"🏪 *LOCALE:* {job['business_name'].upper()}\n"
-                                f"💼 *Ruolo Cercato:* {job['role']}\n"
-                                f"📍 *Zona:* {job['zone']}\n"
-                                f"⏰ *Turni:* {job['shift']}\n"
-                                f"💰 *Paga:* {job['salary'] if job['salary'] else 'Trattabile'}\n\n"
-                                f"📝 *Descrizione & Requisiti:*\n_{job['description']}_\n\n"
-                                f"📞 *Contatto Candidature:* {job['contact']}\n"
+                                f"🏪 *LOCALE:* {escape_telegram_markdown(job['business_name'].upper())}\n"
+                                f"💼 *Ruolo Cercato:* {escape_telegram_markdown(job['role'])}\n"
+                                f"📍 *Zona:* {escape_telegram_markdown(job['zone'])}\n"
+                                f"⏰ *Turni:* {escape_telegram_markdown(job['shift'])}\n"
+                                f"💰 *Paga:* {escape_telegram_markdown(job['salary'] if job['salary'] else 'Trattabile')}\n\n"
+                                f"📝 *Descrizione & Requisiti:*\n_{escape_telegram_markdown(job['description'])}_\n\n"
+                                f"📞 *Contatto Candidature:* {escape_telegram_markdown(job['contact'])}\n"
                                 f"👤 *Pubblicato da:* "
                                 f"[{'@' + job['username'] if job['username'] else 'Profilo Telegram verificato'}]"
                                 f"(tg://user?id={job['user_id']})\n"
@@ -330,8 +383,8 @@ class WebAppHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
                             try:
                                 with urllib.request.urlopen(req_md) as resp_md:
                                     logger.info(f"✅ Messaggio Telegram #{msg_id} modificato con successo nel gruppo per job #{job_id}")
-                            except Exception as e_md:
-                                logger.warning(f"Fallback Markdown fallito per job #{job_id}: {e_md}. Invio in Plain Text...")
+                            except Exception:
+                                logger.warning(f"Fallback Markdown fallito per job #{job_id}. Invio in Plain Text...")
                                 if pkg == "evidenza":
                                     plain_header = "🔝 OFFERTA IN EVIDENZA (SPONSOR 24H) 🔝"
                                 elif pkg == "vip":
@@ -361,8 +414,8 @@ class WebAppHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
                                 try:
                                     with urllib.request.urlopen(req_plain) as resp_plain:
                                         logger.info(f"✅ Messaggio Telegram #{msg_id} modificato in Plain Text per job #{job_id}")
-                                except Exception as e_plain:
-                                    logger.error(f"❌ Impossibile aggiornare messaggio #{msg_id} in Plain Text: {e_plain}")
+                                except Exception:
+                                    logger.error(f"❌ Impossibile aggiornare messaggio #{msg_id} in Plain Text")
 
 
                     self.send_response(200)
@@ -395,7 +448,7 @@ def start_web_server(port: int = None):
     def run_server():
         try:
             handler = WebAppHTTPRequestHandler
-            with socketserver.TCPServer(("0.0.0.0", port), handler) as httpd:
+            with http.server.ThreadingHTTPServer(("0.0.0.0", port), handler) as httpd:
                 logger.info(f"🌐 Server WebApp in ascolto sulla porta {port}")
                 httpd.serve_forever()
         except Exception as e:

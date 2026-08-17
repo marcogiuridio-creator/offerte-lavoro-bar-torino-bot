@@ -397,7 +397,7 @@
         try {
           await fetch('/api/save_profile', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', 'X-Telegram-Init-Data': tg ? tg.initData : '' },
             body: JSON.stringify(payload)
           });
         } catch(e) {
@@ -442,7 +442,7 @@
       if (!userId) return;
 
       try {
-        const resp = await fetch(`/api/get_profile?user_id=${userId}`);
+        const resp = await fetch(`/api/get_profile?user_id=${userId}`, {headers: {'X-Telegram-Init-Data': tg ? tg.initData : ''}});
         const data = await resp.json();
 
         if (data.status === 'ok' && data.profile) {
@@ -501,4 +501,3 @@
   </script>
 </body>
 </html>
-

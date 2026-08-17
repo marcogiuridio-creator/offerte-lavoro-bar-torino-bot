@@ -184,10 +184,14 @@
     const urlParams = new URLSearchParams(window.location.search);
     const jobId = urlParams.get('job_id') || '1';
 
+    function escapeHtml(value) {
+      return String(value ?? '').replace(/[&<>'"]/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[ch]));
+    }
+
     async function loadCandidates() {
       const container = document.getElementById('candidatesList');
       try {
-        const resp = await fetch(`/api/get_employer_candidates?job_id=${jobId}`);
+        const resp = await fetch(`/api/get_employer_candidates?job_id=${encodeURIComponent(jobId)}`, {headers: {'X-Telegram-Init-Data': tg ? tg.initData : ''}});
         const data = await resp.json();
 
         if (!data.candidates || data.candidates.length === 0) {
@@ -200,27 +204,34 @@
           const hasApplied = c.application_status !== 'nessuna';
           const appliedBadge = hasApplied ? `<span class="badge-applied">📩 CANDIDATO (PRIORITÀ)</span>` : '';
           const premBadge = c.is_premium ? `<span class="badge-prem">⭐ PREMIUM</span>` : `<span class="badge-base">⚪ BASE</span>`;
-          const tgBtn = c.username ? `<a class="btn-action btn-tg" href="https://t.me/${c.username}" target="_blank">💬 Telegram</a>` : '';
-          const callBtn = c.phone ? `<a class="btn-action btn-call" href="tel:${c.phone}">📱 Chiama</a>` : '';
+          const firstName = escapeHtml(c.first_name);
+          const username = escapeHtml(c.username);
+          const phone = String(c.phone || '').replace(/[^+0-9 ]/g, '');
+          const roles = Array.isArray(c.roles) ? c.roles.map(escapeHtml).join(', ') : '';
+          const experience = escapeHtml(c.experience || 'N/D');
+          const q1 = escapeHtml(c.screening_q1);
+          const q2 = escapeHtml(c.screening_q2);
+          const tgBtn = username ? `<a class="btn-action btn-tg" href="https://t.me/${encodeURIComponent(c.username)}" target="_blank" rel="noopener">💬 Telegram</a>` : '';
+          const callBtn = phone ? `<a class="btn-action btn-call" href="tel:${encodeURIComponent(phone)}">📱 Chiama</a>` : '';
 
           html += `
             <div class="cand-card ${hasApplied ? 'has-applied' : ''} ${c.is_premium ? 'is-premium' : ''}">
               <div class="cand-header">
-                <span class="cand-name">${c.first_name} ${c.username ? '(@' + c.username + ')' : ''}</span>
+                <span class="cand-name">${firstName} ${username ? '(@' + username + ')' : ''}</span>
                 <div class="badges-container">
                   ${appliedBadge}
                   ${premBadge}
                 </div>
               </div>
               <div class="cand-info">
-                💼 <b>Ruoli:</b> ${c.roles.join(', ') || 'Horeca'}<br>
-                ⏳ <b>Esperienza:</b> ${c.experience || 'N/D'}<br>
+                💼 <b>Ruoli:</b> ${roles || 'Horeca'}<br>
+                ⏳ <b>Esperienza:</b> ${experience}<br>
                 🎯 <b>Affinità Match:</b> ${c.match_score}%
               </div>
               ${hasApplied ? `
               <div class="screening-box">
-                <div><b>Pre-screening:</b> ${c.screening_q1}</div>
-                ${c.screening_q2 ? `<div><b>Requisiti/HACCP:</b> ${c.screening_q2}</div>` : ''}
+                <div><b>Pre-screening:</b> ${q1}</div>
+                ${q2 ? `<div><b>Requisiti/HACCP:</b> ${q2}</div>` : ''}
               </div>` : ''}
               <div class="actions-grid">
                 ${tgBtn}

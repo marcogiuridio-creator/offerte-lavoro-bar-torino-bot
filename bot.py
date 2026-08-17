@@ -35,6 +35,7 @@ from telegram.ext import (
 )
 
 from telegram.constants import ParseMode
+from telegram.helpers import escape_markdown
 
 import config
 import database as db
@@ -51,6 +52,10 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+def safe_markdown(value) -> str:
+    return escape_markdown(str(value or ""), version=1)
+
+
 # ─── Helpers ───────────────────────────────────────────────────────────────────
 
 def is_admin(user_or_id) -> bool:
@@ -59,11 +64,6 @@ def is_admin(user_or_id) -> bool:
         return user_or_id in config.ADMIN_IDS
     if hasattr(user_or_id, "id") and user_or_id.id in config.ADMIN_IDS:
         return True
-    uname = getattr(user_or_id, "username", "") or ""
-    if uname:
-        clean_user = uname.lower().replace("@", "").strip()
-        if clean_user in ["marcogiuridio", "banu80"]:
-            return True
     return False
 
 
@@ -500,7 +500,7 @@ async def on_group_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # ── 6. Rate limiting (solo per offerte/richieste) ──
     if category in ("OFFERTA", "RICHIESTA"):
-        can, next_time = db.can_post(user_id, config.RATE_LIMIT_HOURS, config.MAX_POSTS_PER_DAY)
+        can, next_time = db.claim_post_quota(user_id, config.RATE_LIMIT_HOURS, config.MAX_POSTS_PER_DAY)
         if not can:
             await msg.delete()
             rate_msg = config.RATE_LIMIT_MESSAGE.format(
@@ -519,8 +519,8 @@ async def on_group_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             logger.info(f"⏳ Rate limit attivato per {user.first_name}")
             return
 
-        # Registra il post
-        db.record_post(user_id, msg.message_id, category, text)
+        # Registra il contenuto del post; la quota è già stata riservata atomicamente.
+        db.record_post_content(user_id, msg.message_id, category, text)
 
         # Auto-tagging CRM: classifica automaticamente l'utente come datore o lavoratore
         if category == "OFFERTA":
@@ -956,6 +956,9 @@ async def cmd_security_log(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def on_link_approval(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Gestisce approvazione/rifiuto link da parte dell'admin (bottoni inline)."""
     query = update.callback_query
+    if not is_admin(update.effective_user.id):
+        await query.answer("Operazione riservata agli amministratori", show_alert=True)
+        return
     await query.answer()
 
     parts = query.data.split(":")
@@ -1090,6 +1093,7 @@ async def on_payment_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         payload = "premium_subscription_stars"
         currency = "XTR"
         prices = [LabeledPrice("Abbonamento Premium 30 giorni", 100)]
+        context.user_data["expected_payment"] = {"payload": payload, "currency": currency, "amount": 100}
 
         try:
             await context.bot.send_invoice(
@@ -1123,6 +1127,7 @@ async def on_payment_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         payload = "premium_subscription_stripe"
         currency = "EUR"
         prices = [LabeledPrice("Abbonamento Premium 30 giorni", 219)] # 219 centesimi = 2,19€
+        context.user_data["expected_payment"] = {"payload": payload, "currency": currency, "amount": 219}
 
 
         try:
@@ -1143,7 +1148,12 @@ async def on_payment_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def precheckout_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Risponde alla verifica pre-checkout del pagamento."""
     query = update.pre_checkout_query
-    await query.answer(ok=True)
+    expected = context.user_data.get("expected_payment")
+    valid = bool(expected and query.invoice_payload == expected["payload"] and
+                 query.currency == expected["currency"] and
+                 query.total_amount == expected["amount"] and
+                 query.from_user.id == update.effective_user.id)
+    await query.answer(ok=valid, error_message=None if valid else "Pagamento non riconosciuto o scaduto.")
 
 
 async def successful_payment_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1151,6 +1161,14 @@ async def successful_payment_callback(update: Update, context: ContextTypes.DEFA
     user = update.effective_user
     payment_info = update.message.successful_payment
     payload = payment_info.invoice_payload
+    expected = context.user_data.get("expected_payment")
+    if not expected or payload != expected["payload"] or payment_info.currency != expected["currency"] or payment_info.total_amount != expected["amount"]:
+        logger.warning("Pagamento rifiutato: payload o importo non corrispondente")
+        return
+    if not db.record_payment_once(payment_info.telegram_payment_charge_id, user.id, payload, payment_info.currency, payment_info.total_amount):
+        logger.warning("Pagamento duplicato ignorato")
+        return
+    context.user_data.pop("expected_payment", None)
 
     # SE È UN ANNUNCIO DI LAVORO A PAGAMENTO (250 o 500 STELLE)
     if payload.startswith("job_offer_") or "pending_job" in context.user_data:
@@ -1200,13 +1218,13 @@ async def successful_payment_callback(update: Update, context: ContextTypes.DEFA
 
         post_text = (
             f"{header}\n\n"
-            f"🏪 *LOCALE:* {business.upper()}\n"
-            f"💼 *Ruolo Cercato:* {role}\n"
-            f"📍 *Zona:* {zone}\n"
-            f"⏰ *Turni:* {shift}\n"
-            f"💰 *Paga:* {salary if salary else 'Trattabile'}\n\n"
-            f"📝 *Descrizione & Requisiti:*\n_{desc}_\n\n"
-            f"📞 *Contatto Candidature:* {contact}\n"
+            f"🏪 *LOCALE:* {safe_markdown(business.upper())}\n"
+            f"💼 *Ruolo Cercato:* {safe_markdown(role)}\n"
+            f"📍 *Zona:* {safe_markdown(zone)}\n"
+            f"⏰ *Turni:* {safe_markdown(shift)}\n"
+            f"💰 *Paga:* {safe_markdown(salary if salary else 'Trattabile')}\n\n"
+            f"📝 *Descrizione & Requisiti:*\n_{safe_markdown(desc)}_\n\n"
+            f"📞 *Contatto Candidature:* {safe_markdown(contact)}\n"
             f"👤 *Pubblicato da:* {author_identity_markdown(user.id, user.username or '')}"
         )
 
@@ -1385,8 +1403,11 @@ async def on_candidate_apply_submit(update: Update, context: ContextTypes.DEFAUL
 
     user = update.effective_user
     flow = context.user_data.pop(f"app_flow_{job_id}", {})
-    q1 = flow.get("q1", "Disponibile")
-    q2 = flow.get("q2", "HACCP OK")
+    if flow.get("job_id") != job_id or "q1" not in flow or "q2" not in flow:
+        await query.message.reply_text("❌ Pre-screening incompleto o scaduto. Riavvia la candidatura.")
+        return
+    q1 = flow["q1"]
+    q2 = flow["q2"]
 
     profile = db.get_candidate_profile(user.id)
     job = db.get_job_offer(job_id)
@@ -1469,6 +1490,9 @@ async def on_employer_app_status(update: Update, context: ContextTypes.DEFAULT_T
     app_id = int(parts[1])
     new_status = parts[2]
 
+    if new_status not in {"interview", "rejected"} or not db.application_owned_by(app_id, update.effective_user.id):
+        await query.answer("Operazione non autorizzata", show_alert=True)
+        return
     db.update_application_status(app_id, new_status)
 
     if new_status == "interview":
@@ -1747,6 +1771,10 @@ async def on_webapp_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
             }
 
             if pkg == "free":
+                allowed, reason = db.claim_post_quota(user.id, config.RATE_LIMIT_HOURS, config.MAX_POSTS_PER_DAY)
+                if not allowed:
+                    await update.effective_message.reply_text(f"⏳ Limite pubblicazioni raggiunto. {reason}")
+                    return
                 job_id = db.create_job_offer(
                     user_id=user.id,
                     username=user.username or "",
@@ -1763,13 +1791,13 @@ async def on_webapp_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
                 post_text = (
                     f"✅ *OFFERTA ORGANIZZATA CON IL BOT*\n"
-                    f"🏪 *{business.upper()}*\n\n"
-                    f"💼 *Ruolo Cercato:* {role}\n"
-                    f"📍 *Zona:* {zone}\n"
-                    f"⏰ *Turni:* {shift}\n"
-                    f"💰 *Paga:* {salary if salary else 'Trattabile'}\n\n"
-                    f"📝 *Descrizione & Requisiti:*\n_{desc}_\n\n"
-                    f"📞 *Contatto Candidature:* {contact}\n"
+                    f"🏪 *{safe_markdown(business.upper())}*\n\n"
+                    f"💼 *Ruolo Cercato:* {safe_markdown(role)}\n"
+                    f"📍 *Zona:* {safe_markdown(zone)}\n"
+                    f"⏰ *Turni:* {safe_markdown(shift)}\n"
+                    f"💰 *Paga:* {safe_markdown(salary if salary else 'Trattabile')}\n\n"
+                    f"📝 *Descrizione & Requisiti:*\n_{safe_markdown(desc)}_\n\n"
+                    f"📞 *Contatto Candidature:* {safe_markdown(contact)}\n"
                     f"👤 *Pubblicato da:* {author_identity}"
                 )
                 pub_msg = None
@@ -1859,6 +1887,7 @@ async def on_webapp_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 description = f"Annuncio {business} ({role} - {zone}) con Pin e Push Broadcast"
                 payload = f"job_offer_id_{job_id}"
                 currency = "XTR"
+                context.user_data["expected_payment"] = {"payload": payload, "currency": currency, "amount": stars}
                 prices = [LabeledPrice(f"Annuncio {pkg_name}", stars)]
 
                 await context.bot.send_invoice(
@@ -1967,6 +1996,9 @@ async def on_webapp_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def cmd_test_offerta(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Comando di test: simula la pubblicazione di un annuncio senza inviare nulla al gruppo pubblico."""
     user = update.effective_user
+    if not is_admin(user.id):
+        await update.message.reply_text("❌ Questo comando è riservato agli amministratori.")
+        return
     username_clean = (user.username or "").lower().replace("@", "").strip()
 
 

@@ -133,3 +133,4 @@ ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "marcogiuridio o @banu80")
 
 # ─── Database ──────────────────────────────────────────────────────────────────
 DB_PATH = os.getenv("DB_PATH", "bot_data.db")
+ENABLE_SEED_IMPORT = os.getenv("ENABLE_SEED_IMPORT", "false").lower() == "true"

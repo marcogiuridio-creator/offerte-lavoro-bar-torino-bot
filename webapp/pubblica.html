@@ -451,7 +451,7 @@
         try {
           const resp = await fetch(`${API_BASE_URL}/api/update_job_offer`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', 'X-Telegram-Init-Data': tg ? tg.initData : '' },
             body: JSON.stringify(payload)
           });
           const resData = await resp.json();
@@ -526,7 +526,7 @@
       if (!editingJobId) return;
 
       try {
-        const resp = await fetch(`${API_BASE_URL}/api/get_job_offer?job_id=${editingJobId}`);
+        const resp = await fetch(`${API_BASE_URL}/api/get_job_offer?job_id=${encodeURIComponent(editingJobId)}`, {headers: {'X-Telegram-Init-Data': tg ? tg.initData : ''}});
         const data = await resp.json();
 
         if (data.status === 'ok' && data.job) {

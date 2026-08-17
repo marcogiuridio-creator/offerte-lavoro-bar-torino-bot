@@ -1,6 +1,6 @@
 import sqlite3
 from datetime import datetime, timedelta
-from config import DB_PATH
+from config import DB_PATH, ENABLE_SEED_IMPORT
 
 
 def get_conn():
@@ -118,6 +118,15 @@ def init_db():
             details       TEXT,
             created_at    TEXT DEFAULT (datetime('now'))
         );
+
+        CREATE TABLE IF NOT EXISTS payment_events (
+            transaction_id TEXT PRIMARY KEY,
+            user_id INTEGER NOT NULL,
+            payload TEXT NOT NULL,
+            currency TEXT NOT NULL,
+            amount INTEGER NOT NULL,
+            created_at TEXT DEFAULT (datetime('now'))
+        );
         """)
 
 
@@ -147,7 +156,7 @@ def init_db():
 
         # Auto-seed: importa utenti da seed_users.json se la tabella users è vuota
         count = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
-        if count == 0:
+        if count == 0 and ENABLE_SEED_IMPORT:
             import json
             import os
             seed_path = os.path.join(os.path.dirname(__file__), "seed_users.json")
@@ -163,7 +172,7 @@ def init_db():
 
         # Auto-seed: importa offerte da seed_jobs.json se la tabella job_offers è vuota
         jobs_count = conn.execute("SELECT COUNT(*) FROM job_offers").fetchone()[0]
-        if jobs_count == 0:
+        if jobs_count == 0 and ENABLE_SEED_IMPORT:
             import json
             import os
             seed_jobs_path = os.path.join(os.path.dirname(__file__), "seed_jobs.json")
@@ -183,7 +192,7 @@ def init_db():
 
         # Auto-seed: importa profili candidati da seed_candidates.json se candidate_profiles è vuota
         cands_count = conn.execute("SELECT COUNT(*) FROM candidate_profiles").fetchone()[0]
-        if cands_count == 0:
+        if cands_count == 0 and ENABLE_SEED_IMPORT:
             import json
             import os
             seed_cands_path = os.path.join(os.path.dirname(__file__), "seed_candidates.json")
@@ -417,6 +426,20 @@ def record_post(user_id: int, message_id: int, category: str, text: str):
         conn.execute("""
             INSERT INTO stats_daily (date, posts_total)
             VALUES (?, 1)
+            ON CONFLICT(date) DO UPDATE SET posts_total = posts_total + 1
+        """, (today,))
+
+
+def record_post_content(user_id: int, message_id: int, category: str, text: str):
+    """Persist a post after claim_post_quota already reserved the quota."""
+    today = datetime.now().strftime("%Y-%m-%d")
+    with get_conn() as conn:
+        conn.execute(
+            "INSERT INTO posts (user_id, message_id, category, text) VALUES (?, ?, ?, ?)",
+            (user_id, message_id, category, text[:1000]),
+        )
+        conn.execute("""
+            INSERT INTO stats_daily (date, posts_total) VALUES (?, 1)
             ON CONFLICT(date) DO UPDATE SET posts_total = posts_total + 1
         """, (today,))
         if category == "OFFERTA":
@@ -660,19 +683,11 @@ def update_job_offer_message_id(job_id: int, message_id: int):
 def get_user_job_offers(user_id: int, username: str = ""):
     """Recupera tutte le offerte pubblicate da uno specifico titolare."""
     with get_conn() as conn:
-        clean_user = username.lower().replace("@", "").strip() if username else ""
-        if clean_user:
-            return conn.execute("""
-                SELECT * FROM job_offers
-                WHERE user_id = ? OR (username IS NOT NULL AND username != '' AND LOWER(username) = ?)
-                ORDER BY created_at DESC
-            """, (user_id, clean_user)).fetchall()
-        else:
-            return conn.execute("""
-                SELECT * FROM job_offers
-                WHERE user_id = ?
-                ORDER BY created_at DESC
-            """, (user_id,)).fetchall()
+        return conn.execute("""
+            SELECT * FROM job_offers
+            WHERE user_id = ?
+            ORDER BY created_at DESC
+        """, (user_id,)).fetchall()
 
 
 
@@ -695,6 +710,12 @@ def save_application(
 ) -> int:
     """Salva la candidatura avanzata di un lavoratore."""
     with get_conn() as conn:
+        existing = conn.execute(
+            "SELECT app_id FROM applications WHERE job_id = ? AND candidate_id = ?",
+            (job_id, candidate_id),
+        ).fetchone()
+        if existing:
+            return existing["app_id"]
         cursor = conn.execute("""
             INSERT INTO applications (
                 job_id, candidate_id, candidate_user, match_score, screening_q1, screening_q2, screening_notes
@@ -719,6 +740,61 @@ def update_application_status(app_id: int, status: str):
     """Aggiorna lo stato della candidatura (es. 'interview', 'rejected', 'hired')."""
     with get_conn() as conn:
         conn.execute("UPDATE applications SET status = ? WHERE app_id = ?", (status, app_id))
+
+
+def application_owned_by(app_id: int, employer_id: int) -> bool:
+    with get_conn() as conn:
+        row = conn.execute("""
+            SELECT 1
+            FROM applications a
+            JOIN job_offers j ON j.job_id = a.job_id
+            WHERE a.app_id = ? AND j.user_id = ?
+        """, (app_id, employer_id)).fetchone()
+        return bool(row)
+
+
+def record_payment_once(transaction_id: str, user_id: int, payload: str, currency: str, amount: int) -> bool:
+    if not transaction_id:
+        return False
+    try:
+        with get_conn() as conn:
+            conn.execute("""
+                INSERT INTO payment_events (transaction_id, user_id, payload, currency, amount)
+                VALUES (?, ?, ?, ?, ?)
+            """, (transaction_id, user_id, payload, currency, amount))
+        return True
+    except sqlite3.IntegrityError:
+        return False
+
+
+def claim_post_quota(user_id: int, rate_limit_hours: int, max_per_day: int) -> tuple[bool, str]:
+    """Atomically reserve one publication slot for all publication paths."""
+    now = datetime.now()
+    today = now.strftime("%Y-%m-%d")
+    with get_conn() as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        row = conn.execute(
+            "SELECT last_post, posts_today, last_date FROM users WHERE user_id = ?",
+            (user_id,),
+        ).fetchone()
+        if not row:
+            conn.execute(
+                "INSERT INTO users (user_id, posts_today, last_date, last_post) VALUES (?, 1, ?, ?)",
+                (user_id, today, now.isoformat()),
+            )
+            return True, ""
+        count = 0 if row["last_date"] != today else (row["posts_today"] or 0)
+        if count >= max_per_day:
+            return False, f"Hai già pubblicato {max_per_day} annunci oggi. Riprova domani!"
+        if row["last_post"]:
+            last = datetime.fromisoformat(row["last_post"])
+            if now - last < timedelta(hours=rate_limit_hours):
+                return False, (last + timedelta(hours=rate_limit_hours)).strftime("%H:%M")
+        conn.execute(
+            "UPDATE users SET last_post = ?, posts_today = ?, last_date = ? WHERE user_id = ?",
+            (now.isoformat(), count + 1, today, user_id),
+        )
+        return True, ""
 
 
 def get_active_vip_jobs():
