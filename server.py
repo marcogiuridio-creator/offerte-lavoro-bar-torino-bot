@@ -252,6 +252,9 @@ class WebAppHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
                 job_id = data.get("job_id")
                 if job_id:
                     job_id = int(job_id)
+                    existing_job = db.get_job_offer(job_id)
+                    if not existing_job:
+                        raise ValueError(f"Offerta #{job_id} inesistente")
                     db.update_job_offer(
                         job_id=job_id,
                         business_name=data.get("business_name", ""),
@@ -260,7 +263,16 @@ class WebAppHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
                         shift=data.get("shift", ""),
                         salary=data.get("salary", ""),
                         description=data.get("description", ""),
-                        contact=data.get("contact", "")
+                        # L'identità Telegram non può essere sostituita da questa API.
+                        contact=existing_job["contact"]
+                    )
+                    db.record_security_event(
+                        event_type="api_offer_update",
+                        user_id=existing_job["user_id"],
+                        username=existing_job["username"] or "",
+                        visible_text=existing_job["contact"] or "",
+                        target=f"tg://user?id={existing_job['user_id']}",
+                        details=f"Offerta #{job_id} aggiornata; contatto identità preservato.",
                     )
                     logger.info(f"✅ Annuncio #{job_id} aggiornato via API")
 
@@ -301,7 +313,9 @@ class WebAppHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
                                 f"💰 *Paga:* {job['salary'] if job['salary'] else 'Trattabile'}\n\n"
                                 f"📝 *Descrizione & Requisiti:*\n_{job['description']}_\n\n"
                                 f"📞 *Contatto Candidature:* {job['contact']}\n"
-                                f"👤 *Pubblicato da:* @{job['username'] if job['username'] else 'Datore'}\n"
+                                f"👤 *Pubblicato da:* "
+                                f"[{'@' + job['username'] if job['username'] else 'Profilo Telegram verificato'}]"
+                                f"(tg://user?id={job['user_id']})\n"
                                 f"✏️ _(Annuncio Aggiornato dal Datore)_"
                             )
 
@@ -335,7 +349,7 @@ class WebAppHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
                                     f"Paga: {job['salary'] if job['salary'] else 'Trattabile'}\n\n"
                                     f"Descrizione & Requisiti:\n{job['description']}\n\n"
                                     f"Contatto Candidature: {job['contact']}\n"
-                                    f"Pubblicato da: @{job['username'] if job['username'] else 'Datore'}\n"
+                                    f"Pubblicato da: ID Telegram verificato {job['user_id']}\n"
                                     f"(Annuncio Aggiornato dal Datore)"
                                 )
                                 payload_plain = {

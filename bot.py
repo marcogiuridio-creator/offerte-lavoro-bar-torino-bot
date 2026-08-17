@@ -20,6 +20,7 @@ from telegram import (
     WebAppInfo,
     LabeledPrice,
     BotCommand,
+    MessageEntity,
 )
 
 from telegram.ext import (
@@ -76,6 +77,73 @@ def classify_group_text(text: str) -> str:
     """Classifica il contenuto ignorando gli URL, gestiti da una regola separata."""
     classification_text = re.sub(r"https?://\S+|www\.\S+\.\S+", " ", text)
     return classify(classification_text)
+
+
+TELEGRAM_PROFILE_RE = re.compile(
+    r"(?:https?://)?(?:t\.me|telegram\.me)/([A-Za-z0-9_]{5,})|@([A-Za-z0-9_]{5,})",
+    re.IGNORECASE,
+)
+
+
+def telegram_usernames_in(text: str):
+    """Estrae gli username Telegram dichiarati in un contatto o URL."""
+    return {
+        (match.group(1) or match.group(2)).lower()
+        for match in TELEGRAM_PROFILE_RE.finditer(text or "")
+    }
+
+
+def validate_author_contact(contact: str, user):
+    """Un contatto Telegram deve identificare lo stesso user_id che pubblica."""
+    referenced = telegram_usernames_in(contact)
+    if not referenced:
+        return True, ""
+    actual = (getattr(user, "username", "") or "").lower()
+    if not actual:
+        return False, "Il profilo autore non ha uno username Telegram pubblico."
+    if referenced != {actual}:
+        return False, f"Il contatto indica {', '.join(sorted(referenced))}, ma l'autore è @{actual}."
+    return True, ""
+
+
+def author_identity_markdown(user_id: int, username: str = "") -> str:
+    """Crea un riferimento Telegram legato all'ID immutabile dell'autore."""
+    label = f"@{username}" if username else "Profilo Telegram verificato"
+    return f"[{label}](tg://user?id={int(user_id)})"
+
+
+def author_contact_button(user_id: int):
+    return InlineKeyboardButton("💬 Contatta l’autore verificato", url=f"tg://user?id={int(user_id)}")
+
+
+def message_link_entities(message):
+    """Legge URL e link nascosti usando il parser UTF-16 di python-telegram-bot."""
+    parsed = {}
+    if getattr(message, "text", None):
+        parsed.update(message.parse_entities() or {})
+    if getattr(message, "caption", None):
+        parsed.update(message.parse_caption_entities() or {})
+    return parsed
+
+
+def suspicious_identity_link(message, user, category: str):
+    """Rileva link mascherati e contatti Telegram diversi dall'autore di un'offerta."""
+    actual = (getattr(user, "username", "") or "").lower()
+    for entity, visible in message_link_entities(message).items():
+        entity_type = entity.type
+        if entity_type == MessageEntity.TEXT_LINK:
+            target = entity.url or ""
+            visible_clean = (visible or "").strip()
+            # Un URL celato sotto un nome o una frase è sempre sottoposto a blocco.
+            if not re.fullmatch(r"(?:https?://|tg://)\S+", visible_clean, re.IGNORECASE):
+                return "masked_text_link", visible_clean, target
+            if visible_clean.rstrip("/").lower() != target.rstrip("/").lower():
+                return "masked_destination_mismatch", visible_clean, target
+        elif entity_type == MessageEntity.MENTION and category == "OFFERTA":
+            target_users = telegram_usernames_in(visible)
+            if target_users and target_users != ({actual} if actual else set()):
+                return "author_link_mismatch", visible, visible
+    return None
 
 
 MANUAL_OFFER_INVITE = """📢 Il tuo annuncio è stato pubblicato correttamente.
@@ -334,7 +402,40 @@ async def on_group_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # di riconoscere frasi come "cerco lavoro, ecco il mio CV https://...".
     category = classify_group_text(text)
 
-    # ── 2. Controlla link esterni ──
+    # ── 2. Identità e link mascherati ──
+    suspicious = suspicious_identity_link(msg, user, category)
+    if suspicious:
+        event_type, visible, target = suspicious
+        await msg.delete()
+        db.record_spam_blocked()
+        db.record_security_event(
+            event_type=event_type,
+            user_id=user_id,
+            username=user.username or "",
+            chat_id=msg.chat_id,
+            message_id=msg.message_id,
+            visible_text=visible,
+            target=target,
+            details="Messaggio eliminato automaticamente: link nascosto o identità Telegram non coerente con l'autore.",
+        )
+        for admin_id in config.ADMIN_IDS:
+            try:
+                await context.bot.send_message(
+                    chat_id=admin_id,
+                    text=(
+                        "🛡 Link bloccato automaticamente\n\n"
+                        f"Evento: {event_type}\n"
+                        f"Autore: {user.first_name} ({user_id})\n"
+                        f"Testo visibile: {(visible or '')[:120]}\n"
+                        f"Destinazione: {(target or '')[:180]}"
+                    ),
+                )
+            except Exception as e:
+                logger.warning(f"Impossibile notificare admin {admin_id}: {e}")
+        logger.warning(f"🛡 {event_type} bloccato per user_id={user_id}")
+        return
+
+    # ── 3. Controlla link esterni ──
     # Una ricerca lavoro con link al CV segue comunque il percorso candidati.
     if has_external_link(text) and category != "RICHIESTA":
         db.record_spam_blocked()
@@ -550,6 +651,7 @@ async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "/featured `ID_messaggio` — Metti in evidenza post\n"
             "/regole — Mostra regole nel gruppo\n"
             "/match `testo` — Analisi matching candidati\n"
+            "/security_log `[numero]` — Registro link e identità bloccati\n"
         )
     else:
         text = (
@@ -826,6 +928,30 @@ async def cmd_match(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(msg, parse_mode=ParseMode.MARKDOWN)
 
 
+async def cmd_security_log(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Comando /security_log [limite] — registro sicurezza, solo admin."""
+    if not is_admin(update.effective_user):
+        return
+    try:
+        limit = int(context.args[0]) if context.args else 15
+    except (TypeError, ValueError):
+        limit = 15
+    events = db.get_security_events(limit)
+    if not events:
+        await update.message.reply_text("🛡 Il registro sicurezza è vuoto.")
+        return
+    lines = ["🛡 REGISTRO SICUREZZA\n"]
+    for event in events:
+        username = f"@{event['username']}" if event['username'] else "senza username"
+        lines.append(
+            f"#{event['event_id']} {event['event_type']} — {event['created_at']}\n"
+            f"Utente: {username} ({event['user_id'] or '-'})\n"
+            f"Visibile: {(event['visible_text'] or '-')[:80]}\n"
+            f"Target: {(event['target'] or '-')[:100]}"
+        )
+    await update.message.reply_text("\n\n".join(lines))
+
+
 
 async def on_link_approval(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Gestisce approvazione/rifiuto link da parte dell'admin (bottoni inline)."""
@@ -1081,7 +1207,7 @@ async def successful_payment_callback(update: Update, context: ContextTypes.DEFA
             f"💰 *Paga:* {salary if salary else 'Trattabile'}\n\n"
             f"📝 *Descrizione & Requisiti:*\n_{desc}_\n\n"
             f"📞 *Contatto Candidature:* {contact}\n"
-            f"👤 *Pubblicato da:* @{user.username if user.username else user.first_name}"
+            f"👤 *Pubblicato da:* {author_identity_markdown(user.id, user.username or '')}"
         )
 
         if not job_id:
@@ -1106,10 +1232,21 @@ async def successful_payment_callback(update: Update, context: ContextTypes.DEFA
                 pub_msg = await context.bot.send_message(
                     chat_id=config.GROUP_ID,
                     text=post_text,
-                    parse_mode=ParseMode.MARKDOWN
+                    parse_mode=ParseMode.MARKDOWN,
+                    reply_markup=InlineKeyboardMarkup([[author_contact_button(user.id)]]),
                 )
                 msg_id = pub_msg.message_id
                 db.update_job_offer_message_id(job_id, msg_id)
+                db.record_security_event(
+                    event_type="offer_identity_bound",
+                    user_id=user.id,
+                    username=user.username or "",
+                    chat_id=config.GROUP_ID,
+                    message_id=msg_id,
+                    visible_text=contact,
+                    target=f"tg://user?id={user.id}",
+                    details=f"Offerta a pagamento #{job_id} collegata all'ID Telegram dell'autore.",
+                )
                 # Fissa il post in cima al gruppo (Pin)
                 try:
                     await context.bot.pin_chat_message(
@@ -1576,6 +1713,26 @@ async def on_webapp_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
             desc = data.get("description", "").strip()
             contact = data.get("contact", "").strip()
 
+            contact_ok, contact_error = validate_author_contact(contact, user)
+            if not contact_ok:
+                db.record_security_event(
+                    event_type="structured_contact_mismatch",
+                    user_id=user.id,
+                    username=user.username or "",
+                    visible_text=contact,
+                    target=f"tg://user?id={user.id}",
+                    details=contact_error,
+                )
+                await update.effective_message.reply_text(
+                    "🛡 *CONTATTO TELEGRAM NON VALIDO*\n\n"
+                    "Il contatto Telegram indicato non appartiene all’account che sta pubblicando. "
+                    "Usa il tuo username reale oppure un numero di telefono.",
+                    parse_mode=ParseMode.MARKDOWN,
+                )
+                return
+
+            author_identity = author_identity_markdown(user.id, user.username or "")
+
             job_details = {
                 "user_id": user.id,
                 "username": user.username or "",
@@ -1613,13 +1770,14 @@ async def on_webapp_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     f"💰 *Paga:* {salary if salary else 'Trattabile'}\n\n"
                     f"📝 *Descrizione & Requisiti:*\n_{desc}_\n\n"
                     f"📞 *Contatto Candidature:* {contact}\n"
-                    f"👤 *Pubblicato da:* @{user.username if user.username else user.first_name}"
+                    f"👤 *Pubblicato da:* {author_identity}"
                 )
                 pub_msg = None
                 if config.GROUP_ID != 0:
                     try:
                         offer_keyboard = InlineKeyboardMarkup([
                             [InlineKeyboardButton("📩 Candidati in 1-Click", callback_data=f"apply_start:{job_id}")],
+                            [author_contact_button(user.id)],
                             [InlineKeyboardButton(
                                 "📊 Dashboard Candidati",
                                 url=f"{config.WEBAPP_DASHBOARD_URL}?job_id={job_id}&user_id={user.id}",
@@ -1644,6 +1802,15 @@ async def on_webapp_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         job_id=job_id,
                     )
                 await send_free_employer_preview(context, user, job_id, post_text)
+                db.record_security_event(
+                    event_type="offer_identity_bound",
+                    user_id=user.id,
+                    username=user.username or "",
+                    message_id=pub_msg.message_id if pub_msg else None,
+                    visible_text=contact,
+                    target=f"tg://user?id={user.id}",
+                    details=f"Offerta #{job_id} collegata all'ID Telegram dell'autore.",
+                )
 
                 await update.effective_message.reply_text(
                     "✅ *ANNUNCIO GRATUITO PUBBLICATO!*\n\n"
@@ -1716,6 +1883,31 @@ async def on_webapp_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 desc = data.get("description", "").strip()
                 contact = data.get("contact", "").strip()
 
+                job = db.get_job_offer(job_id)
+                if not job or (int(job["user_id"]) != user.id and not is_admin(user)):
+                    db.record_security_event(
+                        event_type="unauthorized_offer_edit",
+                        user_id=user.id,
+                        username=user.username or "",
+                        details=f"Tentativo modifica offerta #{job_id}",
+                    )
+                    await update.effective_message.reply_text("❌ Non puoi modificare questa offerta.")
+                    return
+                contact_ok, contact_error = validate_author_contact(contact, user)
+                if not contact_ok:
+                    db.record_security_event(
+                        event_type="structured_contact_mismatch",
+                        user_id=user.id,
+                        username=user.username or "",
+                        visible_text=contact,
+                        target=f"tg://user?id={user.id}",
+                        details=contact_error,
+                    )
+                    await update.effective_message.reply_text(
+                        "🛡 Il contatto Telegram non coincide con l’autore dell’offerta."
+                    )
+                    return
+
                 db.update_job_offer(
                     job_id=job_id,
                     business_name=business,
@@ -1748,7 +1940,7 @@ async def on_webapp_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             f"💰 *Paga:* {salary if salary else 'Trattabile'}\n\n"
                             f"📝 *Descrizione & Requisiti:*\n_{desc}_\n\n"
                             f"📞 *Contatto Candidature:* {contact}\n"
-                            f"👤 *Pubblicato da:* @{user.username if user.username else user.first_name}\n"
+                            f"👤 *Pubblicato da:* {author_identity_markdown(user.id, user.username or '')}\n"
                             f"✏️ _(Annuncio Aggiornato dal Datore)_"
                         )
                         await context.bot.edit_message_text(
@@ -2328,6 +2520,7 @@ def main():
     app.add_handler(CommandHandler("premium", cmd_premium))
     app.add_handler(CommandHandler("grant_premium", cmd_grant_premium))
     app.add_handler(CommandHandler("match", cmd_match))
+    app.add_handler(CommandHandler("security_log", cmd_security_log))
     app.add_handler(CommandHandler("test_offerta", cmd_test_offerta))
 
     # CRM Admin: Gestione Titolari, Lavoratori & Candidati Registrati

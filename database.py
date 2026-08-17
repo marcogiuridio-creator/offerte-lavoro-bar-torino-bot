@@ -105,6 +105,19 @@ def init_db():
             FOREIGN KEY (job_id) REFERENCES job_offers(job_id),
             FOREIGN KEY (candidate_id) REFERENCES candidate_profiles(user_id)
         );
+
+        CREATE TABLE IF NOT EXISTS security_events (
+            event_id      INTEGER PRIMARY KEY AUTOINCREMENT,
+            event_type    TEXT NOT NULL,
+            user_id       INTEGER,
+            username      TEXT,
+            chat_id       INTEGER,
+            message_id    INTEGER,
+            visible_text  TEXT,
+            target        TEXT,
+            details       TEXT,
+            created_at    TEXT DEFAULT (datetime('now'))
+        );
         """)
 
 
@@ -205,6 +218,40 @@ def set_setting(key: str, value):
             INSERT INTO bot_settings (key, value) VALUES (?, ?)
             ON CONFLICT(key) DO UPDATE SET value = excluded.value
         """, (key, str(value)))
+
+
+def record_security_event(
+    event_type: str,
+    user_id: int = None,
+    username: str = "",
+    chat_id: int = None,
+    message_id: int = None,
+    visible_text: str = "",
+    target: str = "",
+    details: str = "",
+):
+    """Registra un evento di sicurezza senza dipendere dai log Railway."""
+    with get_conn() as conn:
+        conn.execute("""
+            INSERT INTO security_events (
+                event_type, user_id, username, chat_id, message_id,
+                visible_text, target, details
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            event_type, user_id, username or "", chat_id, message_id,
+            (visible_text or "")[:500], (target or "")[:500], (details or "")[:1000],
+        ))
+
+
+def get_security_events(limit: int = 20):
+    """Restituisce gli ultimi eventi per il registro amministrativo."""
+    safe_limit = max(1, min(int(limit), 100))
+    with get_conn() as conn:
+        return conn.execute("""
+            SELECT * FROM security_events
+            ORDER BY event_id DESC
+            LIMIT ?
+        """, (safe_limit,)).fetchall()
 
 
 
