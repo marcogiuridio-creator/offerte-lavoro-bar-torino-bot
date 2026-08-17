@@ -49,6 +49,10 @@ logging.basicConfig(
     format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
     level=logging.INFO,
 )
+# httpx logs the complete Telegram Bot API URL at INFO level.  That URL embeds
+# the bot token, so third-party transport logs must never reach production logs.
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 
@@ -114,6 +118,17 @@ def author_identity_markdown(user_id: int, username: str = "") -> str:
 
 def author_contact_button(user_id: int):
     return InlineKeyboardButton("💬 Contatta l’autore verificato", url=f"tg://user?id={int(user_id)}")
+
+
+def autobump_job_keyboard(job_id: int):
+    """Keyboard valida nei gruppi: i pulsanti WebApp sono ammessi solo in chat private."""
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("⚡ Candidati in 1-Click", callback_data=f"apply_start:{int(job_id)}")],
+        [InlineKeyboardButton(
+            "📊 Apri Dashboard Candidati (Mini-App)",
+            url=f"{config.WEBAPP_DASHBOARD_URL}?job_id={int(job_id)}",
+        )],
+    ])
 
 
 def message_link_entities(message):
@@ -2448,10 +2463,7 @@ async def start_vip_autobump_loop(application: Application):
                             f"👤 *Pubblicato da:* @{user_name if user_name else 'Datore'}"
                         )
 
-                        reply_markup = InlineKeyboardMarkup([
-                            [InlineKeyboardButton("⚡ Candidati in 1-Click", callback_data=f"apply_start:{job_id}")],
-                            [InlineKeyboardButton("📊 Apri Dashboard Candidati (Mini-App)", web_app=WebAppInfo(url=f"{config.WEBAPP_DASHBOARD_URL}?job_id={job_id}"))]
-                        ])
+                        reply_markup = autobump_job_keyboard(job_id)
 
                         # 3. Ripubblica l'annuncio in fondo alla chat del gruppo
                         try:
