@@ -154,6 +154,13 @@ def init_db():
         except Exception:
             pass
 
+        # Registra la chiusura della promozione, così lo stesso annuncio scaduto
+        # non viene processato ad ogni esecuzione del loop.
+        try:
+            conn.execute("ALTER TABLE job_offers ADD COLUMN promotion_ended_at TEXT DEFAULT NULL")
+        except Exception:
+            pass
+
         # Auto-seed: importa utenti da seed_users.json se la tabella users è vuota
         count = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
         if count == 0 and ENABLE_SEED_IMPORT:
@@ -797,31 +804,71 @@ def claim_post_quota(user_id: int, rate_limit_hours: int, max_per_day: int) -> t
         return True, ""
 
 
-def get_active_vip_jobs():
-    """Recupera tutti gli annunci VIP (vip o vip_mensile) verificati ed ancora attivi."""
-    from datetime import datetime
+def _promotion_duration(package: str):
+    """Restituisce la durata contrattuale della promozione."""
+    if package == "vip":
+        return timedelta(days=7)
+    if package == "vip_mensile":
+        return timedelta(days=30)
+    return None
+
+
+def _parse_sqlite_datetime(value: str):
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def get_active_vip_jobs(now=None):
+    """Recupera le promozioni VIP verificate che non hanno ancora raggiunto la scadenza esatta."""
     with get_conn() as conn:
         rows = conn.execute("""
             SELECT * FROM job_offers
             WHERE is_verified = 1
               AND package IN ('vip', 'vip_mensile')
+              AND promotion_ended_at IS NULL
             ORDER BY created_at DESC
         """).fetchall()
-        
-        active_jobs = []
-        now = datetime.now()
-        for r in rows:
-            created_str = r["created_at"]
-            pkg = r["package"]
-            try:
-                created_dt = datetime.strptime(created_str, "%Y-%m-%d %H:%M:%S")
-            except Exception:
-                created_dt = now
 
-            days_diff = (now - created_dt).days
-            if pkg == "vip" and days_diff <= 7:
+        active_jobs = []
+        now = now or datetime.utcnow()
+        for r in rows:
+            created_dt = _parse_sqlite_datetime(r["created_at"])
+            duration = _promotion_duration(r["package"])
+            if created_dt and duration and now < created_dt + duration:
                 active_jobs.append(dict(r))
-            elif pkg == "vip_mensile" and days_diff <= 30:
-                active_jobs.append(dict(r))
-                
         return active_jobs
+
+
+def get_expired_vip_jobs(now=None):
+    """Recupera le promozioni appena scadute che devono essere rimosse dai pinnati."""
+    with get_conn() as conn:
+        rows = conn.execute("""
+            SELECT * FROM job_offers
+            WHERE is_verified = 1
+              AND package IN ('vip', 'vip_mensile')
+              AND promotion_ended_at IS NULL
+            ORDER BY created_at ASC
+        """).fetchall()
+
+        expired_jobs = []
+        now = now or datetime.utcnow()
+        for r in rows:
+            created_dt = _parse_sqlite_datetime(r["created_at"])
+            duration = _promotion_duration(r["package"])
+            if created_dt and duration and now >= created_dt + duration:
+                expired_jobs.append(dict(r))
+        return expired_jobs
+
+
+def mark_vip_promotion_ended(job_id: int, ended_at=None):
+    """Segna una promozione come conclusa senza cancellarne i messaggi Telegram."""
+    ended_at = ended_at or datetime.utcnow()
+    with get_conn() as conn:
+        conn.execute(
+            "UPDATE job_offers SET promotion_ended_at = ? WHERE job_id = ?",
+            (ended_at.isoformat(timespec="seconds"), job_id),
+        )
