@@ -2523,21 +2523,17 @@ async def post_init(application: Application):
     await application.bot.set_my_commands(commands)
     logger.info("✅ Menu comandi nativo Telegram impostato con successo!")
 
-    # Avvia il loop di background Auto-Bump per gli annunci VIP & VIP Mensili (ogni 3 ore)
-    asyncio.create_task(start_vip_autobump_loop(application))
-    logger.info("🚀 Loop Auto-Bump triorario per annunci VIP avviato in background!")
+    # Un deploy o riavvio non deve mai pubblicare messaggi nel gruppo.
+    # L'auto-bump resta disattivato finché non sarà sostituito da un flusso
+    # idempotente che aggiorna un messaggio esistente.
+    logger.info("⏸️ Auto-Bump VIP disattivato: nessuna pubblicazione automatica all'avvio")
 
     asyncio.create_task(start_daily_rules_loop(application))
     logger.info("📌 Riepilogo regole giornaliero programmato alle 11:00 Europe/Rome!")
 
-    # Alla prima attivazione pubblica subito il post permanente delle regole.
-    # L'ID salvato evita duplicati ai successivi riavvii; il ciclo giornaliero
-    # lo sostituirà regolarmente alle 11:00.
-    if not db.get_setting("daily_rules_message_id"):
-        try:
-            await publish_daily_rules_summary(application)
-        except Exception as e:
-            logger.error(f"Impossibile pubblicare il primo post delle regole: {e}")
+    # Non pubblicare il riepilogo all'avvio: su storage effimero l'ID può andare
+    # perso e ogni deploy produrrebbe un duplicato. Il loop giornaliero resta
+    # l'unico punto autorizzato alla pubblicazione automatica delle regole.
 
 
 # ─── Main ──────────────────────────────────────────────────────────────────────────────
