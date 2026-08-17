@@ -1330,6 +1330,14 @@ async def successful_payment_callback(update: Update, context: ContextTypes.DEFA
 
 # ─── Pre-Screening & Candidate Applications ───────────────────────────────────
 
+async def send_candidate_private(context, user_id: int, text: str, **kwargs):
+    """Invia il pre-screening solo in privato; non deve mai sporcare il gruppo."""
+    try:
+        return await context.bot.send_message(chat_id=user_id, text=text, **kwargs)
+    except Exception as exc:
+        logger.info(f"Pre-screening privato non disponibile per {user_id}: {exc}")
+        return None
+
 async def on_candidate_apply_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Inizia il flusso di Pre-screening quando il candidato clicca su 'Candidati Ora in 1-Click'."""
     query = update.callback_query
@@ -1339,7 +1347,7 @@ async def on_candidate_apply_start(update: Update, context: ContextTypes.DEFAULT
     user = update.effective_user
     profile = db.get_candidate_profile(user.id)
     if not profile:
-        await query.message.reply_text(
+        await send_candidate_private(context, user.id,
             "❌ Non hai ancora registrato il tuo profilo candidato!\n"
             "Usa il comando `/registrati` per registrarlo in 1 minuto prima di candidarti.",
             parse_mode=ParseMode.MARKDOWN
@@ -1353,7 +1361,7 @@ async def on_candidate_apply_start(update: Update, context: ContextTypes.DEFAULT
         [InlineKeyboardButton("⚠️ Da Concordare col Titolare", callback_data=f"apply_q1:{job_id}:Da Concordare")]
     ])
 
-    await query.message.reply_text(
+    await send_candidate_private(context, user.id,
         "📝 *PRE-SCREENING CANDIDATURA (Passo 1 di 2)*\n\n"
         "❓ *Confermi la tua disponibilità per la zona e gli orari indicati nell'annuncio?*",
         reply_markup=kb,
@@ -1378,7 +1386,7 @@ async def on_candidate_apply_q1(update: Update, context: ContextTypes.DEFAULT_TY
         [InlineKeyboardButton("⏳ In Corso / Da Rinnovare", callback_data=f"apply_q2:{job_id}:HACCP Da Rinnovare")]
     ])
 
-    await query.message.reply_text(
+    await send_candidate_private(context, update.effective_user.id,
         "📝 *PRE-SCREENING CANDIDATURA (Passo 2 di 2)*\n\n"
         "❓ *Possiedi l'attestato HACCP e/o le certificazioni richieste per la ristorazione?*",
         reply_markup=kb,
@@ -1402,7 +1410,7 @@ async def on_candidate_apply_q2(update: Update, context: ContextTypes.DEFAULT_TY
         [InlineKeyboardButton("🚀 Invia Candidatura Ufficiale al Titolare", callback_data=f"apply_submit:{job_id}")]
     ])
 
-    await query.message.reply_text(
+    await send_candidate_private(context, update.effective_user.id,
         "🎯 *PRE-SCREENING COMPLETATO!*\n\n"
         "Clicca sul pulsante qui sotto per trasmettere la tua candidatura ufficiale direttamente al datore di lavoro del locale:",
         reply_markup=kb,
@@ -1419,7 +1427,7 @@ async def on_candidate_apply_submit(update: Update, context: ContextTypes.DEFAUL
     user = update.effective_user
     flow = context.user_data.pop(f"app_flow_{job_id}", {})
     if flow.get("job_id") != job_id or "q1" not in flow or "q2" not in flow:
-        await query.message.reply_text("❌ Pre-screening incompleto o scaduto. Riavvia la candidatura.")
+        await send_candidate_private(context, user.id, "❌ Pre-screening incompleto o scaduto. Riavvia la candidatura.")
         return
     q1 = flow["q1"]
     q2 = flow["q2"]
@@ -1428,7 +1436,7 @@ async def on_candidate_apply_submit(update: Update, context: ContextTypes.DEFAUL
     job = db.get_job_offer(job_id)
 
     if not profile or not job:
-        await query.message.reply_text("❌ Si è verificato un errore con l'annuncio. Riprova più tardi.")
+        await send_candidate_private(context, user.id, "❌ Si è verificato un errore con l'annuncio. Riprova più tardi.")
         return
 
     is_prem = db.is_user_premium(user.id)
@@ -1489,7 +1497,7 @@ async def on_candidate_apply_submit(update: Update, context: ContextTypes.DEFAUL
     except Exception as e:
         logger.error(f"Errore invio candidatura a titolare {employer_user_id}: {e}")
 
-    await query.message.reply_text(
+    await send_candidate_private(context, user.id,
         "🎉 *CANDIDATURA INVIATA CON SUCCESSO!*\n\n"
         "La tua scheda profilo e le risposte del pre-screening sono state trasmesse direttamente al titolare del locale su Telegram!\n"
         "Se il tuo profilo verrà selezionato, verrai contattato a breve per il colloquio.",
