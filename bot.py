@@ -163,16 +163,17 @@ def suspicious_identity_link(message, user, category: str):
 
 MANUAL_OFFER_INVITE = """📢 Il tuo annuncio è stato pubblicato correttamente.
 
-Vuoi ricevere candidature più organizzate?
+🚀 *Con il bot è più visibile e più facile ricevere candidature.*
 
-Trasformalo gratuitamente in un’offerta completa:
+Ripubblicalo gratuitamente come offerta organizzata:
 
-🎯 raggiungi i candidati compatibili
-📩 ricevi candidature con un clic
-📊 gestisci i candidati dalla dashboard
-⭐ ottieni un annuncio ordinato e più riconoscibile
+👀 risalta nel gruppo con un formato chiaro e riconoscibile
+🎯 raggiunge i candidati con un profilo compatibile
+⚡ permette di candidarsi subito con un clic
+📊 raccoglie e organizza le candidature nella dashboard
+👤 mostra un’anteprima gratuita dei profili compatibili
 
-I dati che abbiamo riconosciuto sono già inseriti. Devi solo controllarli, aggiungere il nome del locale e confermare."""
+Abbiamo già inserito i dati riconosciuti: controllali, aggiungi il nome del locale e conferma."""
 
 
 def build_manual_offer_prefill_url(text: str, user) -> str:
@@ -240,7 +241,7 @@ async def invite_manual_offer_author(update: Update, context: ContextTypes.DEFAU
         ])
         temp_msg = await context.bot.send_message(
             chat_id=update.effective_chat.id,
-            text="📢 Per dare più visibilità a questo annuncio, pubblicalo anche tramite il bot.",
+            text="🚀 Con il bot l’offerta è più visibile, raggiunge i profili compatibili e permette ai candidati di proporsi subito con un clic.",
             reply_to_message_id=msg.message_id,
             reply_markup=fallback_keyboard,
         )
@@ -827,7 +828,7 @@ async def cmd_regole(update: Update, context: ContextTypes.DEFAULT_TYPE):
     rules = (
         "📋 *Regole del gruppo — Offerte Lavoro Bar Torino*\n\n"
         "🏪 *DATORI DI LAVORO*\n"
-        "Nel gruppo sono ammesse offerte Horeca per Torino e provincia. Indica ruolo, zona, turni, contratto e contatto. Puoi pubblicare in modo organizzato con /pubblica.\n\n"
+        "Nel gruppo sono ammesse offerte Horeca per Torino e provincia. Ti consigliamo di usare /pubblica: l’offerta è più visibile e riconoscibile, raggiunge i profili compatibili, permette la candidatura in 1-click e raccoglie tutto nella dashboard. La pubblicazione Base è gratuita.\n\n"
         "👤 *CANDIDATI*\n"
         "Non pubblicare messaggi come “cerco lavoro” o “sono disponibile”: vengono rimossi. Crea gratuitamente il profilo con /registrati per essere trovato dai titolari e candidarti alle offerte.\n\n"
         "⭐ *PREMIUM*\n"
@@ -1658,7 +1659,7 @@ async def cmd_pubblica(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     msg = (
         "💼 *PUBBLICA UN'OFFERTA DI LAVORO HORECA*\n\n"
-        "Trova subito personale qualificato (Baristi, Camerieri, Cuochi, Pizzaioli) a Torino!\n\n"
+        "Dai più visibilità alla ricerca e rendi più veloce la candidatura: formato chiaro nel gruppo, matching con i profili compatibili, candidatura in 1-click e dashboard per gestire le risposte.\n\n"
         "Puoi scegliere tra:\n"
         "• 🆓 *Annuncio Gratuito (0€)*\n"
         "• ⭐ *In Evidenza 24h (250 Stelle / 5,39€)* — Post 🔝 + Pin 24h + Push ai candidati!\n"
@@ -2346,11 +2347,15 @@ async def cmd_offerte(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 DAILY_RULES_SUMMARY = (
-    "📌 *COME FUNZIONA IL GRUPPO*\n\n"
+    "📌 *PUBBLICA CON IL BOT: PIÙ VISIBILITÀ, CANDIDATURE PIÙ VELOCI*\n\n"
     "🏪 *CERCHI PERSONALE?*\n"
-    "Puoi pubblicare un’offerta Horeca nel gruppo. Con /pubblica organizzi meglio l’annuncio e puoi raggiungere i candidati compatibili.\n\n"
+    "Usa /pubblica: la pubblicazione Base è gratuita e l’offerta viene mostrata in un formato chiaro e riconoscibile.\n\n"
+    "✅ raggiunge i profili compatibili\n"
+    "⚡ permette ai candidati di proporsi subito in 1-click\n"
+    "📊 raccoglie le candidature nella dashboard\n"
+    "👤 offre un’anteprima dei candidati compatibili\n\n"
     "👤 *CERCHI LAVORO?*\n"
-    "Non pubblicare annunci personali nel gruppo. Registrati gratuitamente con /registrati: i titolari potranno trovare il tuo profilo e potrai candidarti alle offerte.\n\n"
+    "Registrati gratuitamente con /registrati: puoi candidarti più velocemente alle offerte e i titolari possono trovare il tuo profilo. I messaggi personali come ‘cerco lavoro’ vengono rimossi.\n\n"
     "⭐ *CANDIDATO PREMIUM*\n"
     "Ricevi in privato le offerte compatibili e compari prima nelle ricerche dei titolari. Informazioni: /premium\n\n"
     "📖 Leggi tutte le regole con /regole"

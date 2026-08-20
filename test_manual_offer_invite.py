@@ -32,6 +32,9 @@ class ManualOfferInviteTests(unittest.IsolatedAsyncioTestCase):
         private_call = telegram_bot.send_message.await_args
         self.assertEqual(private_call.kwargs["chat_id"], 12345)
         self.assertEqual(private_call.kwargs["text"], bot.MANUAL_OFFER_INVITE)
+        self.assertIn("più visibile", private_call.kwargs["text"])
+        self.assertIn("un clic", private_call.kwargs["text"])
+        self.assertIn("dashboard", private_call.kwargs["text"])
         button = private_call.kwargs["reply_markup"].inline_keyboard[0][0]
         self.assertEqual(button.text, "🚀 Completa gratuitamente l’annuncio")
         params = parse_qs(urlparse(button.web_app.url).query)
