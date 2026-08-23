@@ -649,6 +649,12 @@ def get_job_offer(job_id: int):
         return conn.execute("SELECT * FROM job_offers WHERE job_id = ?", (job_id,)).fetchone()
 
 
+def delete_job_offer(job_id: int):
+    """Elimina un'offerta non pubblicata, usato per il rollback atomico."""
+    with get_conn() as conn:
+        conn.execute("DELETE FROM job_offers WHERE job_id = ?", (job_id,))
+
+
 def verify_job_offer(job_id: int):
     """Segna un annuncio di lavoro come verificato/pagato."""
     with get_conn() as conn:

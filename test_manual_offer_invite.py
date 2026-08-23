@@ -86,5 +86,84 @@ class ManualOfferInviteTests(unittest.IsolatedAsyncioTestCase):
         temp_message.delete.assert_awaited_once()
 
 
+class AutomaticManualOfferConversionTests(unittest.IsolatedAsyncioTestCase):
+    def test_extracts_fields_with_safe_defaults(self):
+        user = SimpleNamespace(id=12, username="datore")
+        fields = bot.automatic_offer_fields(
+            "Cercasi barista full-time in centro, paga 1300 euro al mese", user
+        )
+        self.assertEqual(fields["role"], "Barista")
+        self.assertEqual(fields["zone"], "Centro")
+        self.assertEqual(fields["shift"], "Full-time")
+        self.assertIn("1300", fields["salary"])
+        self.assertEqual(fields["business"], "Locale non specificato")
+        self.assertEqual(fields["contact"], "@datore")
+
+        no_salary = bot.automatic_offer_fields(
+            "Cercasi barista, telefono 3331234567, riferimento estate 2026", user
+        )
+        self.assertEqual(no_salary["salary"], "")
+
+    async def test_publishes_before_deleting_original_and_activates_features(self):
+        update = make_update()
+        update.message.delete = AsyncMock()
+        published = SimpleNamespace(message_id=777)
+        telegram_bot = SimpleNamespace(send_message=AsyncMock(return_value=published))
+        context = SimpleNamespace(bot=telegram_bot)
+
+        with patch("bot.db.create_job_offer", return_value=42) as create_job, \
+             patch("bot.db.update_job_offer_message_id") as update_message_id, \
+             patch("bot.db.record_security_event") as security_event, \
+             patch("bot.matcher.notify_matched_candidates", new=AsyncMock()) as notify, \
+             patch("bot.send_free_employer_preview", new=AsyncMock()) as preview:
+            result = await bot.convert_manual_offer_automatically(update, context)
+
+        self.assertTrue(result)
+        create_job.assert_called_once()
+        telegram_bot.send_message.assert_awaited_once()
+        update_message_id.assert_called_once_with(42, 777)
+        update.message.delete.assert_awaited_once()
+        notify.assert_awaited_once()
+        preview.assert_awaited_once()
+        security_event.assert_called_once()
+        post_call = telegram_bot.send_message.await_args
+        self.assertIn("ORGANIZZATA AUTOMATICAMENTE", post_call.kwargs["text"])
+        buttons = post_call.kwargs["reply_markup"].inline_keyboard
+        self.assertEqual(buttons[0][0].callback_data, "apply_start:42")
+        self.assertIn("job_id=42", buttons[2][0].url)
+
+    async def test_publish_failure_keeps_original_and_rolls_back_database(self):
+        update = make_update()
+        update.message.delete = AsyncMock()
+        telegram_bot = SimpleNamespace(send_message=AsyncMock(side_effect=RuntimeError("Telegram unavailable")))
+        context = SimpleNamespace(bot=telegram_bot)
+
+        with patch("bot.db.create_job_offer", return_value=51), \
+             patch("bot.db.delete_job_offer") as delete_job:
+            result = await bot.convert_manual_offer_automatically(update, context)
+
+        self.assertFalse(result)
+        update.message.delete.assert_not_awaited()
+        delete_job.assert_called_once_with(51)
+
+    async def test_delete_failure_removes_conversion_and_rolls_back_database(self):
+        update = make_update()
+        update.message.delete = AsyncMock(side_effect=RuntimeError("missing delete permission"))
+        telegram_bot = SimpleNamespace(
+            send_message=AsyncMock(return_value=SimpleNamespace(message_id=888)),
+            delete_message=AsyncMock(),
+        )
+        context = SimpleNamespace(bot=telegram_bot)
+
+        with patch("bot.db.create_job_offer", return_value=61), \
+             patch("bot.db.update_job_offer_message_id"), \
+             patch("bot.db.delete_job_offer") as delete_job:
+            result = await bot.convert_manual_offer_automatically(update, context)
+
+        self.assertFalse(result)
+        telegram_bot.delete_message.assert_awaited_once_with(chat_id=-100987, message_id=888)
+        delete_job.assert_called_once_with(61)
+
+
 if __name__ == "__main__":
     unittest.main()

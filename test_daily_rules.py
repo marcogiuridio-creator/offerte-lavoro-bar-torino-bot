@@ -36,7 +36,8 @@ class DailyRulesPublishTests(unittest.IsolatedAsyncioTestCase):
         send_call = telegram_bot.send_message.await_args
         self.assertTrue(send_call.kwargs["disable_notification"])
         self.assertIn("CERCHI PERSONALE", send_call.kwargs["text"])
-        self.assertIn("PIÙ VISIBILITÀ", send_call.kwargs["text"])
+        self.assertIn("ORGANIZZA AUTOMATICAMENTE", send_call.kwargs["text"])
+        self.assertIn("Non devi ricompilarlo", send_call.kwargs["text"])
         self.assertIn("1-click", send_call.kwargs["text"])
         self.assertIn("dashboard", send_call.kwargs["text"])
         urls = [row[0].url for row in send_call.kwargs["reply_markup"].inline_keyboard]

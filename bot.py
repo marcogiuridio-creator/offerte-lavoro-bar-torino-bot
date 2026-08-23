@@ -258,6 +258,150 @@ async def invite_manual_offer_author(update: Update, context: ContextTypes.DEFAU
         logger.warning(f"Impossibile mostrare il fallback per l'offerta manuale di {user.id}: {e}")
 
 
+def automatic_offer_fields(text: str, user) -> dict:
+    """Trasforma un testo libero nei campi minimi di un'offerta gratuita."""
+    extracted = matcher.extract_job_details(text)
+    role_map = {
+        "Bartender": "Bartender / Barman",
+        "Cuoco": "Cuoco / Aiuto Cuoco",
+        "Aiuto Cuoco": "Cuoco / Aiuto Cuoco",
+        "Responsabile": "Responsabile Bar/Sala",
+    }
+    zone_map = {
+        "Lingotto": "Lingotto / Mirafiori",
+        "Mirafiori": "Lingotto / Mirafiori",
+        "San Donato": "San Donato / Cit Turin",
+        "Cit Turin": "San Donato / Cit Turin",
+    }
+    shift_map = {"Turni Notturni": "Turno Serale / Notturno"}
+    roles = list(dict.fromkeys(role_map.get(value, value) for value in extracted["roles"]))
+    zones = list(dict.fromkeys(zone_map.get(value, value) for value in extracted["zones"]))
+    shifts = list(dict.fromkeys(shift_map.get(value, value) for value in extracted["availability"]))
+    salary_match = re.search(
+        r"(?:"
+        r"(?:paga|stipendio|retribuzione|compenso)\s*(?:di|da|:)?\s*"
+        r"(?:€\s*)?\d{1,4}(?:[.,]\d{1,2})?\s*(?:€|euro)?"
+        r"|€\s*\d{1,4}(?:[.,]\d{1,2})?"
+        r"|\d{1,4}(?:[.,]\d{1,2})?\s*(?:€|euro)"
+        r")"
+        r"(?:\s*(?:al|/)?\s*(?:mese|mensili|ora|orari))?",
+        text,
+        re.IGNORECASE,
+    )
+    return {
+        "business": "Locale non specificato",
+        "role": ", ".join(roles) or "Personale Horeca",
+        "zone": ", ".join(zones) or "Torino e provincia",
+        "shift": ", ".join(shifts) or "Da concordare",
+        "salary": salary_match.group(0).strip() if salary_match else "",
+        "description": text.strip()[:1000],
+        "contact": f"@{user.username}" if user.username else "Profilo Telegram verificato",
+    }
+
+
+def automatic_offer_text(fields: dict, user) -> str:
+    """Crea il testo riconoscibile della conversione automatica."""
+    author_identity = author_identity_markdown(user.id, user.username or "")
+    return (
+        "✅ *OFFERTA ORGANIZZATA AUTOMATICAMENTE DAL BOT*\n"
+        f"🏪 *{safe_markdown(fields['business'].upper())}*\n\n"
+        f"💼 *Ruolo Cercato:* {safe_markdown(fields['role'])}\n"
+        f"📍 *Zona:* {safe_markdown(fields['zone'])}\n"
+        f"⏰ *Turni:* {safe_markdown(fields['shift'])}\n"
+        f"💰 *Paga:* {safe_markdown(fields['salary'] or 'Da concordare')}\n\n"
+        f"📝 *Descrizione & Requisiti:*\n_{safe_markdown(fields['description'])}_\n\n"
+        f"👤 *Pubblicato da:* {author_identity}\n\n"
+        "🎯 Matching attivo · ⚡ Candidatura rapida in 1-click"
+    )
+
+
+async def convert_manual_offer_automatically(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
+    """Sostituisce un'offerta manuale solo dopo una pubblicazione strutturata riuscita."""
+    msg = update.message
+    user = update.effective_user
+    if not msg or not user:
+        return False
+
+    fields = automatic_offer_fields(get_text(msg), user)
+    job_id = db.create_job_offer(
+        user_id=user.id,
+        username=user.username or "",
+        business_name=fields["business"],
+        role=fields["role"],
+        zone=fields["zone"],
+        shift=fields["shift"],
+        salary=fields["salary"],
+        description=fields["description"],
+        contact=fields["contact"],
+        package="free",
+        is_verified=0,
+    )
+    post_text = automatic_offer_text(fields, user)
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("📩 Candidati in 1-Click", callback_data=f"apply_start:{job_id}")],
+        [author_contact_button(user.id)],
+        [InlineKeyboardButton(
+            "📊 Dashboard Candidati",
+            url=f"{config.WEBAPP_DASHBOARD_URL}?job_id={job_id}&user_id={user.id}",
+        )],
+    ])
+
+    try:
+        published = await context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text=post_text,
+            parse_mode=ParseMode.MARKDOWN,
+            reply_markup=keyboard,
+        )
+        db.update_job_offer_message_id(job_id, published.message_id)
+    except Exception as e:
+        db.delete_job_offer(job_id)
+        logger.error(f"Conversione automatica non pubblicata; originale conservato: {e}")
+        return False
+
+    try:
+        await msg.delete()
+    except Exception as e:
+        try:
+            await context.bot.delete_message(
+                chat_id=update.effective_chat.id,
+                message_id=published.message_id,
+            )
+        except Exception as cleanup_error:
+            logger.error(f"Impossibile rimuovere la conversione dopo il rollback: {cleanup_error}")
+        db.delete_job_offer(job_id)
+        logger.error(f"Originale non eliminato; conversione annullata per evitare duplicati: {e}")
+        return False
+
+    db.record_security_event(
+        event_type="manual_offer_auto_converted",
+        user_id=user.id,
+        username=user.username or "",
+        chat_id=update.effective_chat.id,
+        message_id=published.message_id,
+        visible_text=fields["contact"],
+        target=f"tg://user?id={user.id}",
+        details=f"Offerta manuale convertita automaticamente nell'offerta #{job_id}.",
+    )
+    try:
+        await matcher.notify_matched_candidates(
+            context.bot,
+            post_text,
+            user.username or "",
+            published.message_id,
+            job_id=job_id,
+        )
+    except Exception as e:
+        logger.warning(f"Offerta #{job_id} pubblicata, ma notifiche matching non completate: {e}")
+    try:
+        await send_free_employer_preview(context, user, job_id, post_text)
+    except Exception as e:
+        logger.info(f"Anteprima privata non disponibile per l'offerta #{job_id}: {e}")
+
+    logger.info(f"🤖 Offerta manuale convertita automaticamente: job_id={job_id}, user_id={user.id}")
+    return True
+
+
 def candidate_search_invite(user_id: int):
     """Restituisce testo e pulsanti adatti allo stato del candidato."""
     profile = db.get_candidate_profile(user_id)
@@ -548,12 +692,10 @@ async def on_group_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         emoji = get_category_emoji(category)
         logger.info(f"{emoji} {format_category_label(category)} da {user.first_name}: {text[:60]}...")
 
-        # Le offerte scritte manualmente restano nel gruppo e nel CRM, ma non
-        # generano notifiche Premium. Le notifiche sono riservate al flusso
-        # strutturato avviato con /pubblica.
+        # Le offerte manuali vengono sostituite con una scheda strutturata.
+        # L'originale viene eliminato soltanto dopo pubblicazione e salvataggio.
         if category == "OFFERTA":
-            await invite_manual_offer_author(update, context)
-            logger.info("📢 Offerta manuale registrata senza notifiche Premium")
+            await convert_manual_offer_automatically(update, context)
         elif category == "RICHIESTA":
             await redirect_candidate_search(update, context)
 
@@ -828,7 +970,7 @@ async def cmd_regole(update: Update, context: ContextTypes.DEFAULT_TYPE):
     rules = (
         "📋 *Regole del gruppo — Offerte Lavoro Bar Torino*\n\n"
         "🏪 *DATORI DI LAVORO*\n"
-        "Nel gruppo sono ammesse offerte Horeca per Torino e provincia. Ti consigliamo di usare /pubblica: l’offerta è più visibile e riconoscibile, raggiunge i profili compatibili, permette la candidatura in 1-click e raccoglie tutto nella dashboard. La pubblicazione Base è gratuita.\n\n"
+        "Scrivi normalmente la tua offerta Horeca per Torino e provincia: il bot la trasforma automaticamente e gratuitamente in una scheda più visibile, con matching, candidatura in 1-click e dashboard. Puoi anche usare /pubblica per compilare tutti i dettagli.\n\n"
         "👤 *CANDIDATI*\n"
         "Non pubblicare messaggi come “cerco lavoro” o “sono disponibile”: vengono rimossi. Crea gratuitamente il profilo con /registrati per essere trovato dai titolari e candidarti alle offerte.\n\n"
         "⭐ *PREMIUM*\n"
@@ -2347,9 +2489,9 @@ async def cmd_offerte(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 DAILY_RULES_SUMMARY = (
-    "📌 *PUBBLICA CON IL BOT: PIÙ VISIBILITÀ, CANDIDATURE PIÙ VELOCI*\n\n"
+    "📌 *IL BOT ORGANIZZA AUTOMATICAMENTE LE OFFERTE*\n\n"
     "🏪 *CERCHI PERSONALE?*\n"
-    "Usa /pubblica: la pubblicazione Base è gratuita e l’offerta viene mostrata in un formato chiaro e riconoscibile.\n\n"
+    "Scrivi normalmente il tuo annuncio: il bot lo trasforma gratuitamente in un’offerta chiara e riconoscibile. Non devi ricompilarlo.\n\n"
     "✅ raggiunge i profili compatibili\n"
     "⚡ permette ai candidati di proporsi subito in 1-click\n"
     "📊 raccoglie le candidature nella dashboard\n"
