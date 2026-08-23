@@ -113,6 +113,7 @@ class AutomaticManualOfferConversionTests(unittest.IsolatedAsyncioTestCase):
 
         with patch("bot.db.create_job_offer", return_value=42) as create_job, \
              patch("bot.db.update_job_offer_message_id") as update_message_id, \
+             patch("bot.db.mark_post_converted") as mark_converted, \
              patch("bot.db.record_security_event") as security_event, \
              patch("bot.matcher.notify_matched_candidates", new=AsyncMock()) as notify, \
              patch("bot.send_free_employer_preview", new=AsyncMock()) as preview:
@@ -123,6 +124,7 @@ class AutomaticManualOfferConversionTests(unittest.IsolatedAsyncioTestCase):
         telegram_bot.send_message.assert_awaited_once()
         update_message_id.assert_called_once_with(42, 777)
         update.message.delete.assert_awaited_once()
+        mark_converted.assert_called_once_with(12345, 321, 42)
         notify.assert_awaited_once()
         preview.assert_awaited_once()
         security_event.assert_called_once()
@@ -163,6 +165,35 @@ class AutomaticManualOfferConversionTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(result)
         telegram_bot.delete_message.assert_awaited_once_with(chat_id=-100987, message_id=888)
         delete_job.assert_called_once_with(61)
+
+    async def test_historical_backfill_is_idempotent_and_suppresses_notifications(self):
+        rows = [{
+            "message_id": 321,
+            "text": "Cercasi barista full-time in centro",
+            "user_id": 12345,
+            "username": "datoretorino",
+        }]
+        application = SimpleNamespace(bot=SimpleNamespace(delete_message=AsyncMock()))
+        with patch("bot.config.GROUP_ID", -100987), \
+             patch("bot.db.get_setting", return_value=None), \
+             patch("bot.db.get_unconverted_manual_offers", return_value=rows), \
+             patch("bot.db.set_setting") as set_setting, \
+             patch("bot.convert_manual_offer_automatically", new=AsyncMock(return_value=True)) as convert:
+            result = await bot.convert_recent_manual_offers(application)
+
+        self.assertEqual(result["converted"], 1)
+        self.assertEqual(result["failed"], 0)
+        self.assertFalse(convert.await_args.kwargs["activate_notifications"])
+        set_setting.assert_called_once_with("manual_offer_backfill_48h_v1", "complete")
+
+    async def test_historical_backfill_does_not_repeat_after_completion(self):
+        application = SimpleNamespace(bot=SimpleNamespace())
+        with patch("bot.db.get_setting", return_value="complete"), \
+             patch("bot.db.get_unconverted_manual_offers") as get_rows:
+            result = await bot.convert_recent_manual_offers(application)
+
+        self.assertTrue(result["already_complete"])
+        get_rows.assert_not_called()
 
 
 if __name__ == "__main__":

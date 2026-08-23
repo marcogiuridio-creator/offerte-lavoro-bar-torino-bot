@@ -49,7 +49,7 @@ class DailyRulesPublishTests(unittest.IsolatedAsyncioTestCase):
             disable_notification=True,
         )
 
-    async def test_startup_never_publishes_or_starts_autobump(self):
+    async def test_startup_runs_authorized_backfill_but_not_rules_or_autobump(self):
         application = SimpleNamespace(bot=SimpleNamespace(set_my_commands=AsyncMock()))
         created_coroutines = []
 
@@ -58,9 +58,12 @@ class DailyRulesPublishTests(unittest.IsolatedAsyncioTestCase):
             coro.close()
             return SimpleNamespace()
 
-        with patch("bot.asyncio.create_task", side_effect=close_background), patch("bot.publish_daily_rules_summary", new=AsyncMock()) as publish:
+        with patch("bot.asyncio.create_task", side_effect=close_background), \
+             patch("bot.publish_daily_rules_summary", new=AsyncMock()) as publish, \
+             patch("bot.convert_recent_manual_offers", new=AsyncMock()) as backfill:
             await bot.post_init(application)
         publish.assert_not_awaited()
+        backfill.assert_awaited_once_with(application, hours=48)
         self.assertEqual(len(created_coroutines), 1)
         self.assertEqual(created_coroutines[0].cr_code.co_name, "start_daily_rules_loop")
 

@@ -315,7 +315,11 @@ def automatic_offer_text(fields: dict, user) -> str:
     )
 
 
-async def convert_manual_offer_automatically(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
+async def convert_manual_offer_automatically(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+    activate_notifications: bool = True,
+) -> bool:
     """Sostituisce un'offerta manuale solo dopo una pubblicazione strutturata riuscita."""
     msg = update.message
     user = update.effective_user
@@ -373,6 +377,8 @@ async def convert_manual_offer_automatically(update: Update, context: ContextTyp
         logger.error(f"Originale non eliminato; conversione annullata per evitare duplicati: {e}")
         return False
 
+    db.mark_post_converted(user.id, msg.message_id, job_id)
+
     db.record_security_event(
         event_type="manual_offer_auto_converted",
         user_id=user.id,
@@ -383,23 +389,73 @@ async def convert_manual_offer_automatically(update: Update, context: ContextTyp
         target=f"tg://user?id={user.id}",
         details=f"Offerta manuale convertita automaticamente nell'offerta #{job_id}.",
     )
-    try:
-        await matcher.notify_matched_candidates(
-            context.bot,
-            post_text,
-            user.username or "",
-            published.message_id,
-            job_id=job_id,
-        )
-    except Exception as e:
-        logger.warning(f"Offerta #{job_id} pubblicata, ma notifiche matching non completate: {e}")
-    try:
-        await send_free_employer_preview(context, user, job_id, post_text)
-    except Exception as e:
-        logger.info(f"Anteprima privata non disponibile per l'offerta #{job_id}: {e}")
+    if activate_notifications:
+        try:
+            await matcher.notify_matched_candidates(
+                context.bot,
+                post_text,
+                user.username or "",
+                published.message_id,
+                job_id=job_id,
+            )
+        except Exception as e:
+            logger.warning(f"Offerta #{job_id} pubblicata, ma notifiche matching non completate: {e}")
+        try:
+            await send_free_employer_preview(context, user, job_id, post_text)
+        except Exception as e:
+            logger.info(f"Anteprima privata non disponibile per l'offerta #{job_id}: {e}")
 
     logger.info(f"🤖 Offerta manuale convertita automaticamente: job_id={job_id}, user_id={user.id}")
     return True
+
+
+async def convert_recent_manual_offers(application: Application, hours: int = 48) -> dict:
+    """Recupera una sola volta le offerte recenti senza notifiche retroattive."""
+    setting_key = "manual_offer_backfill_48h_v1"
+    if db.get_setting(setting_key) == "complete":
+        logger.info("⏭️ Recupero offerte manuali 48h già completato")
+        return {"found": 0, "converted": 0, "failed": 0, "already_complete": True}
+
+    rows = db.get_unconverted_manual_offers(hours=hours)
+    result = {"found": len(rows), "converted": 0, "failed": 0, "already_complete": False}
+    context = type("BackfillContext", (), {"bot": application.bot})()
+
+    for row in rows:
+        async def delete_original(_message, message_id=row["message_id"]):
+            await application.bot.delete_message(chat_id=config.GROUP_ID, message_id=message_id)
+
+        message = type("HistoricalMessage", (), {
+            "message_id": row["message_id"],
+            "text": row["text"],
+            "caption": None,
+            "delete": delete_original,
+        })()
+        user = type("HistoricalUser", (), {
+            "id": row["user_id"],
+            "username": row["username"] or "",
+        })()
+        update = type("HistoricalUpdate", (), {
+            "message": message,
+            "effective_user": user,
+            "effective_chat": type("HistoricalChat", (), {"id": config.GROUP_ID})(),
+        })()
+        converted = await convert_manual_offer_automatically(
+            update,
+            context,
+            activate_notifications=False,
+        )
+        if converted:
+            result["converted"] += 1
+        else:
+            result["failed"] += 1
+
+    if result["failed"] == 0:
+        db.set_setting(setting_key, "complete")
+    logger.info(
+        "🕘 Recupero offerte 48h concluso: "
+        f"trovate={result['found']}, convertite={result['converted']}, errori={result['failed']}"
+    )
+    return result
 
 
 def candidate_search_invite(user_id: int):
@@ -2678,7 +2734,12 @@ async def post_init(application: Application):
     await application.bot.set_my_commands(commands)
     logger.info("✅ Menu comandi nativo Telegram impostato con successo!")
 
-    # Un deploy o riavvio non deve mai pubblicare messaggi nel gruppo.
+    # Recupero straordinario autorizzato: è idempotente, limitato alle ultime
+    # 48 ore e non invia notifiche Premium retroattive.
+    await convert_recent_manual_offers(application, hours=48)
+
+    # Al di fuori del recupero straordinario, un deploy o riavvio non pubblica
+    # messaggi nel gruppo.
     # L'auto-bump resta disattivato finché non sarà sostituito da un flusso
     # idempotente che aggiorna un messaggio esistente.
     logger.info("⏸️ Auto-Bump VIP disattivato: nessuna pubblicazione automatica all'avvio")

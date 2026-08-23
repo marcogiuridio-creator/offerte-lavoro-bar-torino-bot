@@ -161,6 +161,13 @@ def init_db():
         except Exception:
             pass
 
+        # Collega i post manuali alla successiva conversione strutturata e
+        # rende idempotente il recupero storico delle ultime 48 ore.
+        try:
+            conn.execute("ALTER TABLE posts ADD COLUMN converted_job_id INTEGER DEFAULT NULL")
+        except Exception:
+            pass
+
         # Auto-seed: importa utenti da seed_users.json se la tabella users è vuota
         count = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
         if count == 0 and ENABLE_SEED_IMPORT:
@@ -505,6 +512,38 @@ def get_recent_posts(limit: int = 20) -> list:
             ORDER BY p.created_at DESC
             LIMIT ?
         """, (limit,)).fetchall()
+
+
+def get_unconverted_manual_offers(hours: int = 48) -> list:
+    """Recupera offerte manuali recenti non ancora trasformate in job_offers."""
+    modifier = f"-{max(1, int(hours))} hours"
+    with get_conn() as conn:
+        return conn.execute("""
+            SELECT p.*, u.username, u.first_name
+            FROM posts p
+            LEFT JOIN users u ON u.user_id = p.user_id
+            WHERE p.category = 'OFFERTA'
+              AND p.created_at >= datetime('now', ?)
+              AND p.converted_job_id IS NULL
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM job_offers j
+                  WHERE j.user_id = p.user_id
+                    AND j.description = p.text
+                    AND j.created_at >= p.created_at
+              )
+            ORDER BY p.created_at ASC
+        """, (modifier,)).fetchall()
+
+
+def mark_post_converted(user_id: int, message_id: int, job_id: int):
+    """Segna il post sorgente come convertito per impedire ripubblicazioni."""
+    with get_conn() as conn:
+        conn.execute("""
+            UPDATE posts
+            SET converted_job_id = ?
+            WHERE user_id = ? AND message_id = ? AND category = 'OFFERTA'
+        """, (job_id, user_id, message_id))
 
 
 # ─── Featured posts ─────────────────────────────────────────────────────────────
