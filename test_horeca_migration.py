@@ -46,6 +46,10 @@ class HorecaMigrationTests(unittest.TestCase):
         schema = (Path(__file__).parent / "horeca" / "database" / "schema.sql").read_text()
         for table in EXPORTER.TABLES + ("telegram_updates", "application_sessions"):
             self.assertIn(f"CREATE TABLE IF NOT EXISTS {table}", schema)
+        self.assertIn("promotion_expires_at", schema)
+        self.assertIn("last_bumped_at", schema)
+        migration = (Path(__file__).parent / "horeca" / "database" / "migrate_paid_promotions.sql").read_text()
+        self.assertIn("ALTER TABLE job_offers", migration)
 
     def test_aruba_webhook_converts_manual_offers_with_safe_rollback(self):
         source = (Path(__file__).parent / "horeca" / "src" / "WebhookHandler.php").read_text()
@@ -67,6 +71,21 @@ class HorecaMigrationTests(unittest.TestCase):
         for marker in ("pre_checkout_query", "answerPreCheckoutQuery", "successful_payment", "sendInvoice"):
             self.assertIn(marker, handler)
         self.assertIn("premium_subscription_stars", handler)
+
+    def test_aruba_paid_promotions_and_cron_are_present(self):
+        root = Path(__file__).parent
+        repository = (root / "horeca/src/HorecaRepository.php").read_text()
+        handler = (root / "horeca/src/WebhookHandler.php").read_text()
+        cron = (root / "horeca/src/CronRunner.php").read_text()
+        endpoint = (root / "horeca/api/cron.php").read_text()
+        for package, amount in (("evidenza", "250"), ("vip", "500"), ("vip_mensile", "1400")):
+            self.assertIn(package, repository)
+            self.assertIn(amount, repository)
+        self.assertIn("job_offer_id_", handler)
+        self.assertIn("activePremiumCandidates", handler)
+        self.assertIn("dueVipBumps", cron)
+        self.assertIn("daily_rules_date", cron)
+        self.assertIn("X_HORECA_CRON_SECRET", endpoint.upper())
         self.assertIn("activatePremiumPayment", repository)
         self.assertIn("INSERT IGNORE INTO payment_events", repository)
         self.assertIn("DATE_ADD", repository)

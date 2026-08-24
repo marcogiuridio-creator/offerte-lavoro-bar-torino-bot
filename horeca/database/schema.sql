@@ -83,9 +83,12 @@ CREATE TABLE IF NOT EXISTS job_offers (
     is_verified TINYINT(1) NOT NULL DEFAULT 0,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     message_id BIGINT SIGNED NULL,
+    promotion_expires_at DATETIME NULL,
+    last_bumped_at DATETIME NULL,
     promotion_ended_at DATETIME NULL,
     INDEX idx_jobs_user (user_id),
     INDEX idx_jobs_created (created_at),
+    INDEX idx_jobs_promotion_due (is_verified, package, promotion_expires_at, last_bumped_at),
     CONSTRAINT fk_jobs_user FOREIGN KEY (user_id) REFERENCES users(user_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 

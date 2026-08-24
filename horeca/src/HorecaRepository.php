@@ -238,6 +238,148 @@ final class HorecaRepository
             ->execute(['message_id' => $messageId, 'job_id' => $jobId]);
     }
 
+    /** @param array<string,mixed> $user @param array<string,mixed> $fields */
+    public function createPaidJob(array $user, array $fields, string $package): int
+    {
+        if (!isset(self::paidPackages()[$package])) {
+            throw new \InvalidArgumentException('Pacchetto promozionale non valido.');
+        }
+        $this->db->beginTransaction();
+        try {
+            $this->db->prepare('INSERT INTO users (user_id,username,first_name,last_name,role)
+                VALUES (:id,:username,:first_name,:last_name,\'datore\')
+                ON DUPLICATE KEY UPDATE username=VALUES(username),first_name=VALUES(first_name),
+                    last_name=VALUES(last_name),role=\'datore\'')->execute([
+                'id' => $user['id'], 'username' => $user['username'] ?? '',
+                'first_name' => $user['first_name'] ?? '', 'last_name' => $user['last_name'] ?? '',
+            ]);
+            $sql = 'INSERT INTO job_offers
+                (user_id,username,business_name,role,zone,shift,salary,description,contact,package,is_verified)
+                VALUES (:user_id,:username,:business_name,:role,:zone,:shift,:salary,:description,:contact,:package,0)';
+            $this->db->prepare($sql)->execute([
+                'user_id' => $user['id'], 'username' => $user['username'] ?? '',
+                'business_name' => self::required($fields['business_name'] ?? '', 255, 'locale'),
+                'role' => self::required($fields['role'] ?? '', 255, 'ruolo'),
+                'zone' => self::required($fields['zone'] ?? '', 255, 'zona'),
+                'shift' => self::limited($fields['shift'] ?? '', 255),
+                'salary' => self::limited($fields['salary'] ?? '', 255),
+                'description' => self::limited($fields['description'] ?? '', 10000),
+                'contact' => self::required($fields['contact'] ?? '', 255, 'contatto'),
+                'package' => $package,
+            ]);
+            $jobId = (int) $this->db->lastInsertId();
+            $this->db->commit();
+            return $jobId;
+        } catch (\Throwable $error) {
+            if ($this->db->inTransaction()) $this->db->rollBack();
+            throw $error;
+        }
+    }
+
+    /** @return array{amount:int,days:int,label:string}|null */
+    public static function paidPackage(string $package): ?array
+    {
+        return self::paidPackages()[$package] ?? null;
+    }
+
+    public function validJobCheckout(int $userId, string $payload, string $currency, int $amount): bool
+    {
+        if (!preg_match('/^job_offer_id_(\d+)$/', $payload, $match) || $currency !== 'XTR') return false;
+        $job = $this->job((int) $match[1]);
+        $plan = $job ? self::paidPackage((string) $job['package']) : null;
+        return $job && $plan && (int) $job['user_id'] === $userId && !(int) $job['is_verified']
+            && $amount === $plan['amount'];
+    }
+
+    /** @return array<string,mixed>|null */
+    public function activatePaidJobPayment(int $userId, string $transactionId, string $payload, string $currency, int $amount): ?array
+    {
+        if ($transactionId === '' || !preg_match('/^job_offer_id_(\d+)$/', $payload, $match)) return null;
+        $jobId = (int) $match[1];
+        $this->db->beginTransaction();
+        try {
+            $lock = $this->db->prepare('SELECT * FROM job_offers WHERE job_id=:id FOR UPDATE');
+            $lock->execute(['id' => $jobId]);
+            $job = $lock->fetch();
+            $plan = is_array($job) ? self::paidPackage((string) $job['package']) : null;
+            if (!$job || !$plan || (int) $job['user_id'] !== $userId || (int) $job['is_verified'] !== 0
+                || $currency !== 'XTR' || $amount !== $plan['amount']) {
+                $this->db->rollBack(); return null;
+            }
+            $payment = $this->db->prepare('INSERT IGNORE INTO payment_events
+                (transaction_id,user_id,payload,currency,amount) VALUES (:transaction_id,:user_id,:payload,:currency,:amount)');
+            $payment->execute(['transaction_id'=>$transactionId,'user_id'=>$userId,'payload'=>$payload,'currency'=>$currency,'amount'=>$amount]);
+            if ($payment->rowCount() !== 1) { $this->db->rollBack(); return null; }
+            $sql = 'UPDATE job_offers SET is_verified=1,promotion_expires_at=DATE_ADD(UTC_TIMESTAMP(), INTERVAL '
+                . (int) $plan['days'] . ' DAY),last_bumped_at=UTC_TIMESTAMP() WHERE job_id=:id';
+            $this->db->prepare($sql)->execute(['id' => $jobId]);
+            $this->db->commit();
+            return $this->job($jobId);
+        } catch (\Throwable $error) {
+            if ($this->db->inTransaction()) $this->db->rollBack();
+            throw $error;
+        }
+    }
+
+    /** @return list<array<string,mixed>> */
+    public function activePremiumCandidates(): array
+    {
+        return $this->db->query('SELECT user_id,roles,zones FROM candidate_profiles
+            WHERE is_premium=1 AND premium_until>UTC_TIMESTAMP()')->fetchAll();
+    }
+
+    /** @return list<array<string,mixed>> */
+    public function expiredPromotions(): array
+    {
+        return $this->db->query("SELECT * FROM job_offers WHERE is_verified=1
+            AND package IN ('evidenza','vip','vip_mensile') AND promotion_ended_at IS NULL
+            AND promotion_expires_at IS NOT NULL AND promotion_expires_at<=UTC_TIMESTAMP() LIMIT 50")->fetchAll();
+    }
+
+    /** @return list<array<string,mixed>> */
+    public function dueVipBumps(): array
+    {
+        return $this->db->query("SELECT * FROM job_offers WHERE is_verified=1
+            AND package IN ('vip','vip_mensile') AND promotion_ended_at IS NULL
+            AND promotion_expires_at>UTC_TIMESTAMP()
+            AND (last_bumped_at IS NULL OR last_bumped_at<=DATE_SUB(UTC_TIMESTAMP(),INTERVAL 3 HOUR)) LIMIT 20")->fetchAll();
+    }
+
+    public function markPromotionEnded(int $jobId): void
+    {
+        $this->db->prepare('UPDATE job_offers SET promotion_ended_at=UTC_TIMESTAMP() WHERE job_id=:id AND promotion_ended_at IS NULL')
+            ->execute(['id'=>$jobId]);
+    }
+
+    public function markBumped(int $jobId, int $messageId): void
+    {
+        $this->db->prepare('UPDATE job_offers SET message_id=:message_id,last_bumped_at=UTC_TIMESTAMP() WHERE job_id=:id')
+            ->execute(['id'=>$jobId,'message_id'=>$messageId]);
+    }
+
+    public function setting(string $key): ?string
+    {
+        $statement=$this->db->prepare('SELECT value FROM bot_settings WHERE `key`=:key');
+        $statement->execute(['key'=>$key]); $value=$statement->fetchColumn();
+        return is_string($value) ? $value : null;
+    }
+
+    public function setSetting(string $key, string $value): void
+    {
+        $this->db->prepare('INSERT INTO bot_settings (`key`,value) VALUES (:key,:value)
+            ON DUPLICATE KEY UPDATE value=VALUES(value)')->execute(['key'=>$key,'value'=>$value]);
+    }
+
+    /** @return array<string,array{amount:int,days:int,label:string}> */
+    private static function paidPackages(): array
+    {
+        return [
+            'evidenza' => ['amount'=>250,'days'=>1,'label'=>'In evidenza 24 ore'],
+            'vip' => ['amount'=>500,'days'=>7,'label'=>'VIP 7 giorni'],
+            'vip_mensile' => ['amount'=>1400,'days'=>30,'label'=>'VIP 30 giorni'],
+        ];
+    }
+
     /** @param array<string,mixed> $user */
     public function recordAutomaticConversion(
         array $user,

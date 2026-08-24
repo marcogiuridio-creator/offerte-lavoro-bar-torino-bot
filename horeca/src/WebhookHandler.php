@@ -173,8 +173,10 @@ final class WebhookHandler
         $currency = (string) ($query['currency'] ?? '');
         $amount = (int) ($query['total_amount'] ?? 0);
         $userId = (int) ($query['from']['id'] ?? 0);
-        $valid = $payload === 'premium_subscription_stars' && $currency === 'XTR' && $amount === 100
-            && $userId > 0 && (new HorecaRepository($this->db))->candidateProfile($userId) !== null;
+        $repository = new HorecaRepository($this->db);
+        $valid = ($payload === 'premium_subscription_stars' && $currency === 'XTR' && $amount === 100
+            && $userId > 0 && $repository->candidateProfile($userId) !== null)
+            || $repository->validJobCheckout($userId, $payload, $currency, $amount);
         $parameters = ['pre_checkout_query_id' => (string) ($query['id'] ?? ''), 'ok' => $valid];
         if (!$valid) {
             $parameters['error_message'] = 'Pagamento non riconosciuto oppure profilo candidato mancante.';
@@ -185,9 +187,40 @@ final class WebhookHandler
     /** @param array<string,mixed> $user @param array<string,mixed> $payment */
     private function handleSuccessfulPayment(array $user, int|string $chatId, array $payment): void
     {
-        $expiry = (new HorecaRepository($this->db))->activatePremiumPayment(
+        $repository = new HorecaRepository($this->db);
+        $payload = (string) ($payment['invoice_payload'] ?? '');
+        if (str_starts_with($payload, 'job_offer_id_')) {
+            $job = $repository->activatePaidJobPayment(
+                (int) $user['id'], (string) ($payment['telegram_payment_charge_id'] ?? ''), $payload,
+                (string) ($payment['currency'] ?? ''), (int) ($payment['total_amount'] ?? 0)
+            );
+            if (!$job) return;
+            $groupId = (int) ($this->config['telegram']['group_id'] ?? 0);
+            $sent = $this->telegram->call('sendMessage', [
+                'chat_id'=>$groupId,'text'=>$this->offerMessage($job, $user, true),'parse_mode'=>'HTML',
+                'reply_markup'=>['inline_keyboard'=>[
+                    [['text'=>'📩 Candidati in 1-Click','callback_data'=>'apply_start:' . (int) $job['job_id']]],
+                    [['text'=>'📊 Dashboard Candidati','url'=>rtrim((string) $this->config['app']['base_url'],'/') . '/webapp/dashboard.html?job_id=' . (int) $job['job_id']]],
+                ]],
+            ]);
+            $messageId = (int) ($sent['result']['message_id'] ?? 0);
+            $repository->attachMessage((int) $job['job_id'], $messageId);
+            $this->telegram->call('pinChatMessage', ['chat_id'=>$groupId,'message_id'=>$messageId,'disable_notification'=>true]);
+            foreach ($repository->activePremiumCandidates() as $candidate) {
+                try {
+                    $this->telegram->call('sendMessage', [
+                        'chat_id'=>(int) $candidate['user_id'],
+                        'text'=>'⚡ Nuova offerta Premium: ' . self::html($job['role']) . ' · ' . self::html($job['zone']),
+                        'reply_markup'=>['inline_keyboard'=>[[['text'=>'📩 Candidati ora','callback_data'=>'apply_start:' . (int) $job['job_id']]]]],
+                    ]);
+                } catch (\Throwable $error) { error_log('premium push skipped: ' . $error->getMessage()); }
+            }
+            $this->telegram->call('sendMessage', ['chat_id'=>$chatId,'text'=>'✅ Pagamento ricevuto. Annuncio #' . (int) $job['job_id'] . ' pubblicato e promosso.']);
+            return;
+        }
+        $expiry = $repository->activatePremiumPayment(
             (int) $user['id'], (string) ($payment['telegram_payment_charge_id'] ?? ''),
-            (string) ($payment['invoice_payload'] ?? ''), (string) ($payment['currency'] ?? ''),
+            $payload, (string) ($payment['currency'] ?? ''),
             (int) ($payment['total_amount'] ?? 0)
         );
         if ($expiry === null) {
@@ -332,13 +365,28 @@ final class WebhookHandler
             ]);
             return;
         }
-        if ($action !== 'publish_job_offer' || ($data['package'] ?? 'free') !== 'free') {
+        if ($action !== 'publish_job_offer') {
             return;
         }
         if (!$this->contactBelongsToAuthor((string) ($data['contact'] ?? ''), $user)) {
             $this->telegram->call('sendMessage', [
                 'chat_id' => $chatId,
                 'text' => '🛡 Il contatto Telegram non coincide con l’account che sta pubblicando.',
+            ]);
+            return;
+        }
+        $package = (string) ($data['package'] ?? 'free');
+        if ($package !== 'free') {
+            $plan = HorecaRepository::paidPackage($package);
+            if (!$plan) return;
+            $jobId = $repository->createPaidJob($user, $data, $package);
+            $this->telegram->call('sendInvoice', [
+                'chat_id'=>$chatId,
+                'title'=>'Promozione annuncio Horeca',
+                'description'=>$plan['label'] . ': maggiore visibilità, pin e notifiche rapide ai candidati Premium.',
+                'payload'=>'job_offer_id_' . $jobId,
+                'provider_token'=>'','currency'=>'XTR',
+                'prices'=>[['label'=>$plan['label'],'amount'=>$plan['amount']]],
             ]);
             return;
         }
@@ -383,6 +431,22 @@ final class WebhookHandler
             $repository->rollbackFreeJob($jobId, (int) $user['id']);
             throw $error;
         }
+    }
+
+    /** @param array<string,mixed> $data @param array<string,mixed> $user */
+    private function offerMessage(array $data, array $user, bool $paid): string
+    {
+        $username = trim((string) ($user['username'] ?? $data['username'] ?? ''));
+        $identity = $username !== '' ? '@' . self::html($username) : 'Profilo Telegram verificato';
+        $header = $paid ? '🌟 <b>OFFERTA SPONSOR VERIFICATA</b>' : '✅ <b>OFFERTA ORGANIZZATA CON IL BOT</b>';
+        return $header . "\n" . '🏪 <b>' . self::html(mb_strtoupper((string) $data['business_name'])) . "</b>\n\n"
+            . '💼 <b>Ruolo:</b> ' . self::html($data['role'] ?? '') . "\n"
+            . '📍 <b>Zona:</b> ' . self::html($data['zone'] ?? '') . "\n"
+            . '⏰ <b>Turni:</b> ' . self::html($data['shift'] ?? '') . "\n"
+            . '💰 <b>Paga:</b> ' . self::html(($data['salary'] ?? '') ?: 'Trattabile') . "\n\n"
+            . '📝 ' . self::html($data['description'] ?? '') . "\n\n"
+            . '📞 <b>Contatto:</b> ' . self::html($data['contact'] ?? '') . "\n"
+            . '👤 <b>Pubblicato da:</b> <a href="tg://user?id=' . (int) $user['id'] . '">' . $identity . '</a>';
     }
 
     /** @param array<string,mixed> $user */
