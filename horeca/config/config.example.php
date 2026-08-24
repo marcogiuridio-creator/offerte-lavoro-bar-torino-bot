@@ -22,5 +22,8 @@ return [
         'password' => 'INSERIRE_SU_ARUBA',
         'charset' => 'utf8mb4',
     ],
+    'limits' => [
+        'rate_hours' => 6,
+        'daily_max' => 2,
+    ],
 ];
-

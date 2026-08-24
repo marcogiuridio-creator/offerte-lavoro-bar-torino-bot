@@ -9,6 +9,8 @@ $required = [
     '/database/schema.sql',
     '/src/Bootstrap.php',
     '/src/TelegramClient.php',
+    '/src/TelegramAuth.php',
+    '/src/HorecaRepository.php',
     '/src/UpdateRepository.php',
     '/src/WebhookHandler.php',
 ];
@@ -27,4 +29,3 @@ foreach (['app', 'telegram', 'database'] as $section) {
     }
 }
 echo "horeca smoke: ok\n";
-

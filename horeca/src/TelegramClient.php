@@ -9,7 +9,7 @@ final class TelegramClient
 {
     public function __construct(private readonly string $token)
     {
-        if ($token === '') {
+        if (!preg_match('/^[0-9]+:[A-Za-z0-9_-]+$/', $token)) {
             throw new RuntimeException('Token Telegram mancante.');
         }
     }
@@ -19,7 +19,7 @@ final class TelegramClient
      */
     public function call(string $method, array $parameters = []): array
     {
-        $url = 'https://api.telegram.org/bot' . rawurlencode($this->token) . '/' . $method;
+        $url = 'https://api.telegram.org/bot' . $this->token . '/' . rawurlencode($method);
         $body = json_encode($parameters, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         $context = stream_context_create(['http' => [
             'method' => 'POST',
@@ -36,4 +36,3 @@ final class TelegramClient
         return $decoded;
     }
 }
-

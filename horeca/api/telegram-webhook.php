@@ -11,6 +11,7 @@ require dirname(__DIR__) . '/src/Bootstrap.php';
 require dirname(__DIR__) . '/src/Http.php';
 require dirname(__DIR__) . '/src/TelegramClient.php';
 require dirname(__DIR__) . '/src/UpdateRepository.php';
+require dirname(__DIR__) . '/src/HorecaRepository.php';
 require dirname(__DIR__) . '/src/WebhookHandler.php';
 
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET') {
@@ -48,4 +49,3 @@ try {
     error_log('horeca webhook error: ' . $error->getMessage());
     Http::json(500, ['status' => 'error', 'error' => 'internal_error']);
 }
-

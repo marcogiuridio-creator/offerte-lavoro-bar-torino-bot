@@ -134,3 +134,13 @@ CREATE TABLE IF NOT EXISTS telegram_updates (
     processed_at DATETIME NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE IF NOT EXISTS application_sessions (
+    candidate_id BIGINT SIGNED NOT NULL,
+    job_id BIGINT UNSIGNED NOT NULL,
+    screening_q1 VARCHAR(255) NULL,
+    screening_q2 VARCHAR(255) NULL,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (candidate_id, job_id),
+    CONSTRAINT fk_session_candidate FOREIGN KEY (candidate_id) REFERENCES users(user_id),
+    CONSTRAINT fk_session_job FOREIGN KEY (job_id) REFERENCES job_offers(job_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

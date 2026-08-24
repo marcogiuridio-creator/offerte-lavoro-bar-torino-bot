@@ -3,9 +3,13 @@ Options -Indexes
 <IfModule mod_rewrite.c>
     RewriteEngine On
     RewriteRule ^(?:config|database|src|tests)(?:/|$) - [F,L,NC]
+    RewriteRule ^api/(get_profile|get_job_offer|get_employer_candidates|save_profile|update_job_offer|update_application_status)$ api/index.php?route=$1 [QSA,L]
 </IfModule>
 
 <FilesMatch "^(?:\.env|composer\.(?:json|lock)|README\.md)$">
     Require all denied
 </FilesMatch>
 
+<FilesMatch "\.(?:json|sqlite|db)$">
+    Require all denied
+</FilesMatch>
