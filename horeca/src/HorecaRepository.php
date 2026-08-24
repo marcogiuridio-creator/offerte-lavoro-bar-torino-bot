@@ -179,6 +179,42 @@ final class HorecaRepository
             ->execute(['message_id' => $messageId, 'job_id' => $jobId]);
     }
 
+    /** @param array<string,mixed> $user */
+    public function recordAutomaticConversion(
+        array $user,
+        int|string $chatId,
+        int $originalMessageId,
+        int $publishedMessageId,
+        int $jobId,
+        string $text
+    ): void {
+        $this->db->beginTransaction();
+        try {
+            $post = 'INSERT INTO posts (user_id,message_id,category,text,converted_job_id)
+                VALUES (:user_id,:message_id,\'OFFERTA\',:text,:job_id)
+                ON DUPLICATE KEY UPDATE category=\'OFFERTA\',text=VALUES(text),converted_job_id=VALUES(converted_job_id)';
+            $this->db->prepare($post)->execute([
+                'user_id' => $user['id'], 'message_id' => $originalMessageId,
+                'text' => self::limited($text, 10000), 'job_id' => $jobId,
+            ]);
+            $event = 'INSERT INTO security_events
+                (event_type,user_id,username,chat_id,message_id,visible_text,target,details)
+                VALUES (\'manual_offer_auto_converted\',:user_id,:username,:chat_id,:message_id,
+                    :visible_text,:target,:details)';
+            $this->db->prepare($event)->execute([
+                'user_id' => $user['id'], 'username' => $user['username'] ?? '',
+                'chat_id' => $chatId, 'message_id' => $publishedMessageId,
+                'visible_text' => $user['username'] ?? '',
+                'target' => 'tg://user?id=' . (int) $user['id'],
+                'details' => "Offerta manuale convertita automaticamente nell'offerta #{$jobId}.",
+            ]);
+            $this->db->commit();
+        } catch (\Throwable $error) {
+            $this->db->rollBack();
+            throw $error;
+        }
+    }
+
     public function rollbackFreeJob(int $jobId, int $userId): void
     {
         $this->db->beginTransaction();

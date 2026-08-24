@@ -47,6 +47,18 @@ class HorecaMigrationTests(unittest.TestCase):
         for table in EXPORTER.TABLES + ("telegram_updates", "application_sessions"):
             self.assertIn(f"CREATE TABLE IF NOT EXISTS {table}", schema)
 
+    def test_aruba_webhook_converts_manual_offers_with_safe_rollback(self):
+        source = (Path(__file__).parent / "horeca" / "src" / "WebhookHandler.php").read_text()
+        self.assertIn("handleAutomaticOffer", source)
+        self.assertIn("looksLikeJobOffer", source)
+        self.assertIn("OFFERTA ORGANIZZATA AUTOMATICAMENTE DAL BOT", source)
+        publish = source.index("$this->telegram->call('sendMessage'", source.index("handleAutomaticOffer"))
+        delete_original = source.index("$this->telegram->call('deleteMessage'", publish)
+        attach = source.index("$repository->attachMessage", delete_original)
+        self.assertLess(publish, delete_original)
+        self.assertLess(delete_original, attach)
+        self.assertIn("$repository->rollbackFreeJob", source[attach:])
+
     def test_aruba_package_contains_webapp_and_no_local_secrets(self):
         repository = Path(__file__).parent
         with tempfile.TemporaryDirectory() as tmp:

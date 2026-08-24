@@ -58,7 +58,122 @@ final class WebhookHandler
         $webAppData = $message['web_app_data']['data'] ?? null;
         if (is_string($webAppData) && isset($message['from']) && is_array($message['from'])) {
             $this->handleWebAppData($message['from'], $chatId, $webAppData);
+            return;
         }
+        if ($text !== '' && !str_starts_with($text, '/')
+            && isset($message['from']) && is_array($message['from'])) {
+            $this->handleAutomaticOffer($message, $message['from'], $chatId, $text);
+        }
+    }
+
+    /** @param array<string,mixed> $message @param array<string,mixed> $user */
+    private function handleAutomaticOffer(array $message, array $user, int|string $chatId, string $text): void
+    {
+        $groupId = (int) ($this->config['telegram']['group_id'] ?? 0);
+        if ($groupId === 0 || (int) $chatId !== $groupId || !$this->looksLikeJobOffer($text)
+            || !isset($message['message_id'], $user['id'])) {
+            return;
+        }
+        $repository = new HorecaRepository($this->db);
+        $fields = $this->automaticFields($text, $user);
+        $result = $repository->createFreeJob(
+            $user, $fields, (int) ($this->config['limits']['rate_hours'] ?? 6),
+            (int) ($this->config['limits']['daily_max'] ?? 2)
+        );
+        if (!($result['ok'] ?? false)) {
+            return;
+        }
+        $jobId = (int) $result['job_id'];
+        $publishedMessageId = 0;
+        try {
+            $sent = $this->telegram->call('sendMessage', [
+                'chat_id' => $groupId,
+                'text' => $this->automaticOfferText($fields, $user),
+                'parse_mode' => 'HTML',
+                'reply_markup' => ['inline_keyboard' => [
+                    [['text' => '📩 Candidati in 1-Click', 'callback_data' => 'apply_start:' . $jobId]],
+                    [['text' => '💬 Contatta l’autore verificato', 'url' => 'tg://user?id=' . (int) $user['id']]],
+                    [['text' => '📊 Dashboard Candidati', 'url' => rtrim((string) $this->config['app']['base_url'], '/') . '/webapp/dashboard.html?job_id=' . $jobId]],
+                ]],
+            ]);
+            $publishedMessageId = (int) ($sent['result']['message_id'] ?? 0);
+            if ($publishedMessageId <= 0) {
+                throw new \RuntimeException('Telegram non ha restituito il messaggio pubblicato.');
+            }
+            $this->telegram->call('deleteMessage', [
+                'chat_id' => $groupId, 'message_id' => (int) $message['message_id'],
+            ]);
+            $repository->recordAutomaticConversion(
+                $user, $chatId, (int) $message['message_id'], $publishedMessageId, $jobId, $text
+            );
+            $repository->attachMessage($jobId, $publishedMessageId);
+        } catch (\Throwable $error) {
+            if ($publishedMessageId > 0) {
+                try {
+                    $this->telegram->call('deleteMessage', [
+                        'chat_id' => $groupId, 'message_id' => $publishedMessageId,
+                    ]);
+                } catch (\Throwable) {
+                }
+            }
+            $repository->rollbackFreeJob($jobId, (int) $user['id']);
+            error_log('horeca automatic conversion rollback: ' . $error->getMessage());
+        }
+    }
+
+    private function looksLikeJobOffer(string $text): bool
+    {
+        $normalized = mb_strtolower($text);
+        $intent = preg_match('/\\b(cercasi|cerchiamo|ricerchiamo|assumiamo|selezioniamo|offerta\\s+di\\s+lavoro|ricerca\\s+personale)\\b/u', $normalized) === 1;
+        $role = preg_match('/\\b(barista|barman|bartender|camerier[ea]|cuoc[oa]|aiuto\\s+cuoc[oa]|lavapiatti|pizzaiol[oa]|chef|banconist[ae]|personale\\s+(?:di\\s+)?sala)\\b/u', $normalized) === 1;
+        return $intent && $role;
+    }
+
+    /** @param array<string,mixed> $user @return array<string,string> */
+    private function automaticFields(string $text, array $user): array
+    {
+        $roles = [
+            '/\\b(?:barman|bartender)\\b/u' => 'Bartender / Barman',
+            '/\\bbarista\\b/u' => 'Barista', '/\\bcamerier[ea]\\b/u' => 'Cameriere/a',
+            '/\\b(?:cuoc[oa]|chef|aiuto\\s+cuoc[oa])\\b/u' => 'Cuoco / Aiuto Cuoco',
+            '/\\blavapiatti\\b/u' => 'Lavapiatti', '/\\bpizzaiol[oa]\\b/u' => 'Pizzaiolo/a',
+        ];
+        $role = 'Personale Horeca';
+        foreach ($roles as $pattern => $label) {
+            if (preg_match($pattern, mb_strtolower($text))) {
+                $role = $label;
+                break;
+            }
+        }
+        $zone = preg_match('/\\b(torino|moncalieri|rivoli|collegno|settimo|chieri|lingotto|mirafiori|san\\s+donato|cit\\s+turin)\\b/iu', $text, $match)
+            ? mb_convert_case($match[1], MB_CASE_TITLE, 'UTF-8') : 'Torino e provincia';
+        $shift = preg_match('/\\b(serale|notturn[oa]|diurno|part[ -]?time|full[ -]?time|weekend)\\b/iu', $text, $match)
+            ? mb_convert_case($match[1], MB_CASE_TITLE, 'UTF-8') : 'Da concordare';
+        $salary = preg_match('/(?:€\\s*\\d{1,4}(?:[.,]\\d{1,2})?|\\d{1,4}(?:[.,]\\d{1,2})?\\s*(?:€|euro))/iu', $text, $match)
+            ? trim($match[0]) : '';
+        $username = trim((string) ($user['username'] ?? ''));
+        return [
+            'business_name' => 'Locale non specificato', 'role' => $role, 'zone' => $zone,
+            'shift' => $shift, 'salary' => $salary,
+            'description' => mb_substr(trim($text), 0, 1000),
+            'contact' => $username !== '' ? '@' . $username : 'Profilo Telegram verificato',
+        ];
+    }
+
+    /** @param array<string,string> $fields @param array<string,mixed> $user */
+    private function automaticOfferText(array $fields, array $user): string
+    {
+        $username = trim((string) ($user['username'] ?? ''));
+        $identity = $username !== '' ? '@' . self::html($username) : 'Profilo Telegram verificato';
+        return "✅ <b>OFFERTA ORGANIZZATA AUTOMATICAMENTE DAL BOT</b>\n"
+            . '🏪 <b>' . self::html(mb_strtoupper($fields['business_name'])) . "</b>\n\n"
+            . '💼 <b>Ruolo cercato:</b> ' . self::html($fields['role']) . "\n"
+            . '📍 <b>Zona:</b> ' . self::html($fields['zone']) . "\n"
+            . '⏰ <b>Turni:</b> ' . self::html($fields['shift']) . "\n"
+            . '💰 <b>Paga:</b> ' . self::html($fields['salary'] ?: 'Da concordare') . "\n\n"
+            . '📝 <b>Descrizione e requisiti:</b>\n' . self::html($fields['description']) . "\n\n"
+            . '👤 <b>Pubblicato da:</b> <a href="tg://user?id=' . (int) $user['id'] . '">' . $identity . "</a>\n\n"
+            . '🎯 Matching attivo · ⚡ Candidatura rapida in 1-click';
     }
 
     /** @param array<string,mixed> $user */
