@@ -13,6 +13,7 @@ require dirname(__DIR__) . '/src/TelegramClient.php';
 require dirname(__DIR__) . '/src/UpdateRepository.php';
 require dirname(__DIR__) . '/src/HorecaRepository.php';
 require dirname(__DIR__) . '/src/WebhookHandler.php';
+require dirname(__DIR__) . '/src/CronRunner.php';
 
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET') {
     Http::json(200, ['status' => 'ok', 'service' => 'horeca-telegram-webhook']);
@@ -43,6 +44,9 @@ try {
 
     $telegram = new TelegramClient((string) $config['telegram']['bot_token']);
     (new WebhookHandler(Bootstrap::db(), $telegram, $config))->handle($update);
+    // Esegue in modo idempotente scadenze, bump VIP e riepilogo giornaliero
+    // anche sugli hosting condivisi senza un daemon sempre acceso.
+    (new \Horeca\CronRunner(Bootstrap::db(), $telegram, $config))->run();
     $repository->markProcessed($updateId);
     Http::json(200, ['status' => 'ok']);
 } catch (Throwable $error) {
