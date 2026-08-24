@@ -16,6 +16,11 @@ BUILD_SPEC = importlib.util.spec_from_file_location(
 )
 BUILDER = importlib.util.module_from_spec(BUILD_SPEC)
 BUILD_SPEC.loader.exec_module(BUILDER)
+SQL_SPEC = importlib.util.spec_from_file_location(
+    "json_to_mysql_sql", Path(__file__).parent / "horeca" / "database" / "json_to_mysql_sql.py"
+)
+SQL_EXPORTER = importlib.util.module_from_spec(SQL_SPEC)
+SQL_SPEC.loader.exec_module(SQL_EXPORTER)
 
 
 class HorecaMigrationTests(unittest.TestCase):
@@ -55,6 +60,38 @@ class HorecaMigrationTests(unittest.TestCase):
             publish = (destination / "webapp" / "pubblica.html").read_text()
             self.assertIn("const API_BASE_URL = '/horeca';", publish)
             self.assertNotIn("offerte-lavoro-bar-torino-bot.up.railway.app", publish)
+
+    def test_mysql_export_uses_hex_literals_and_is_idempotent(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / "export.json"
+            destination = Path(tmp) / "import.sql"
+            tables = {name: [] for name in SQL_EXPORTER.TABLE_ORDER}
+            tables["users"] = [{
+                "user_id": 1,
+                "username": "",
+                "first_name": "L'Ora",
+                "joined_at": "2026-08-24T18:00:00",
+            }]
+            source.write_text(json.dumps({"format": 1, "tables": tables}))
+            SQL_EXPORTER.convert(source, destination, "Sql1948040_5")
+            sql = destination.read_text()
+            self.assertTrue(sql.startswith("USE `Sql1948040_5`;"))
+            self.assertIn("ON DUPLICATE KEY UPDATE", sql)
+            self.assertIn("CONVERT(0x", sql)
+            self.assertNotIn("0x USING", sql)
+            self.assertNotIn("L'Ora", sql)
+            self.assertIn("START TRANSACTION", sql)
+
+    def test_mysql_export_rejects_unsafe_database_name(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / "export.json"
+            destination = Path(tmp) / "import.sql"
+            source.write_text(json.dumps({
+                "format": 1,
+                "tables": {name: [] for name in SQL_EXPORTER.TABLE_ORDER},
+            }))
+            with self.assertRaises(ValueError):
+                SQL_EXPORTER.convert(source, destination, "db`; DROP TABLE users")
 
 
 if __name__ == "__main__":

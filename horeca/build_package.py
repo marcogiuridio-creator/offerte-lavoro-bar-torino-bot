@@ -15,7 +15,11 @@ def build(repository: Path, destination: Path) -> None:
         shutil.rmtree(destination)
     destination.mkdir(parents=True)
     for name in ("api", "src", "config", "database"):
-        shutil.copytree(source / name, destination / name, ignore=shutil.ignore_patterns("*.json", "*.db", "*.sqlite"))
+        shutil.copytree(
+            source / name,
+            destination / name,
+            ignore=shutil.ignore_patterns("local.php", "*.json", "*.db", "*.sqlite"),
+        )
     shutil.copy2(source / ".htaccess", destination / ".htaccess")
     webapp = destination / "webapp"
     shutil.copytree(repository / "webapp", webapp)
