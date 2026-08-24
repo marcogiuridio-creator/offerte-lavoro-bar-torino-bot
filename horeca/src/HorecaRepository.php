@@ -69,6 +69,65 @@ final class HorecaRepository
     }
 
     /** @return list<array<string,mixed>> */
+    public function userOffers(int $userId): array
+    {
+        $statement = $this->db->prepare(
+            'SELECT * FROM job_offers WHERE user_id=:user_id ORDER BY created_at DESC LIMIT 20'
+        );
+        $statement->execute(['user_id' => $userId]);
+        return $statement->fetchAll();
+    }
+
+    /** @return array{users:int,offers:int,candidates:int,applications:int} */
+    public function totals(): array
+    {
+        return [
+            'users' => (int) $this->db->query('SELECT COUNT(*) FROM users')->fetchColumn(),
+            'offers' => (int) $this->db->query('SELECT COUNT(*) FROM job_offers')->fetchColumn(),
+            'candidates' => (int) $this->db->query('SELECT COUNT(*) FROM candidate_profiles')->fetchColumn(),
+            'applications' => (int) $this->db->query('SELECT COUNT(*) FROM applications')->fetchColumn(),
+        ];
+    }
+
+    public function activatePremiumPayment(
+        int $userId,
+        string $transactionId,
+        string $payload,
+        string $currency,
+        int $amount
+    ): ?string {
+        if ($transactionId === '' || $payload !== 'premium_subscription_stars'
+            || $currency !== 'XTR' || $amount !== 100 || !$this->candidateProfile($userId)) {
+            return null;
+        }
+        $this->db->beginTransaction();
+        try {
+            $payment = $this->db->prepare('INSERT IGNORE INTO payment_events
+                (transaction_id,user_id,payload,currency,amount) VALUES (:transaction_id,:user_id,:payload,:currency,:amount)');
+            $payment->execute([
+                'transaction_id' => $transactionId, 'user_id' => $userId, 'payload' => $payload,
+                'currency' => $currency, 'amount' => $amount,
+            ]);
+            if ($payment->rowCount() !== 1) {
+                $this->db->rollBack();
+                return null;
+            }
+            $statement = $this->db->prepare('UPDATE candidate_profiles SET is_premium=1,
+                premium_until=DATE_ADD(GREATEST(COALESCE(premium_until,UTC_TIMESTAMP()),UTC_TIMESTAMP()), INTERVAL 30 DAY)
+                WHERE user_id=:user_id');
+            $statement->execute(['user_id' => $userId]);
+            $expiry = $this->db->prepare('SELECT premium_until FROM candidate_profiles WHERE user_id=:user_id');
+            $expiry->execute(['user_id' => $userId]);
+            $value = $expiry->fetchColumn();
+            $this->db->commit();
+            return is_string($value) ? $value : null;
+        } catch (\Throwable $error) {
+            $this->db->rollBack();
+            throw $error;
+        }
+    }
+
+    /** @return list<array<string,mixed>> */
     public function employerCandidates(int $jobId, int $employerId, bool $isAdmin): array
     {
         $job = $this->job($jobId);

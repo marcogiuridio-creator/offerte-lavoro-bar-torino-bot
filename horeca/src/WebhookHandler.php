@@ -16,6 +16,10 @@ final class WebhookHandler
     /** @param array<string,mixed> $update */
     public function handle(array $update): void
     {
+        if (isset($update['pre_checkout_query']) && is_array($update['pre_checkout_query'])) {
+            $this->handlePreCheckout($update['pre_checkout_query']);
+            return;
+        }
         if (isset($update['callback_query']) && is_array($update['callback_query'])) {
             $this->handleCallback($update['callback_query']);
             return;
@@ -27,6 +31,12 @@ final class WebhookHandler
         $chatId = $message['chat']['id'] ?? null;
         $text = trim((string) ($message['text'] ?? ''));
         if (!is_int($chatId) && !is_string($chatId)) {
+            return;
+        }
+
+        if (isset($message['successful_payment']) && is_array($message['successful_payment'])
+            && isset($message['from']['id'])) {
+            $this->handleSuccessfulPayment($message['from'], $chatId, $message['successful_payment']);
             return;
         }
 
@@ -53,6 +63,19 @@ final class WebhookHandler
                     : 'Pubblica con il bot: offerta più visibile, candidatura rapida e dashboard.',
                 'reply_markup' => ['inline_keyboard' => [[['text' => $label, 'web_app' => ['url' => $base . '/' . $page]]]]],
             ]);
+        } elseif ($command === '/profilo') {
+            $this->sendProfile((array) ($message['from'] ?? []), $chatId);
+        } elseif ($command === '/mie_offerte') {
+            $this->sendUserOffers((array) ($message['from'] ?? []), $chatId);
+        } elseif ($command === '/premium') {
+            $this->sendPremium((array) ($message['from'] ?? []), $chatId);
+        } elseif ($command === '/stats' && $this->isAdmin((int) ($message['from']['id'] ?? 0))) {
+            $totals = (new HorecaRepository($this->db))->totals();
+            $this->telegram->call('sendMessage', [
+                'chat_id' => $chatId,
+                'text' => "📊 <b>Statistiche bot</b>\n\n👥 Utenti: {$totals['users']}\n📢 Offerte: {$totals['offers']}\n👤 Profili: {$totals['candidates']}\n📩 Candidature: {$totals['applications']}",
+                'parse_mode' => 'HTML',
+            ]);
         }
 
         $webAppData = $message['web_app_data']['data'] ?? null;
@@ -64,6 +87,122 @@ final class WebhookHandler
             && isset($message['from']) && is_array($message['from'])) {
             $this->handleAutomaticOffer($message, $message['from'], $chatId, $text);
         }
+    }
+
+    /** @param array<string,mixed> $user */
+    private function sendProfile(array $user, int|string $chatId): void
+    {
+        if (!isset($user['id'])) {
+            return;
+        }
+        $profile = (new HorecaRepository($this->db))->candidateProfile((int) $user['id']);
+        $base = rtrim((string) ($this->config['app']['base_url'] ?? ''), '/');
+        if (!$profile) {
+            $this->telegram->call('sendMessage', [
+                'chat_id' => $chatId, 'text' => 'Non hai ancora un profilo candidato.',
+                'reply_markup' => ['inline_keyboard' => [[[
+                    'text' => '👤 Crea il profilo gratuito', 'web_app' => ['url' => $base . '/webapp/index.html'],
+                ]]],
+            ]);
+            return;
+        }
+        $premium = (int) ($profile['is_premium'] ?? 0) === 1
+            && !empty($profile['premium_until'])
+            && new \DateTimeImmutable((string) $profile['premium_until']) > new \DateTimeImmutable('now');
+        $status = $premium ? '⭐ Premium fino al ' . $profile['premium_until'] : '⚪ Base gratuito';
+        $this->telegram->call('sendMessage', [
+            'chat_id' => $chatId,
+            'text' => "👤 <b>Il tuo profilo</b>\n\nNome: " . self::html($profile['first_name'] ?? '')
+                . "\nStato: " . self::html($status) . "\n\nPuoi aggiornare ruoli, esperienza e disponibilità.",
+            'parse_mode' => 'HTML',
+            'reply_markup' => ['inline_keyboard' => [[[
+                'text' => '✏️ Modifica profilo', 'web_app' => ['url' => $base . '/webapp/index.html'],
+            ]]],
+        ]);
+    }
+
+    /** @param array<string,mixed> $user */
+    private function sendUserOffers(array $user, int|string $chatId): void
+    {
+        if (!isset($user['id'])) {
+            return;
+        }
+        $offers = (new HorecaRepository($this->db))->userOffers((int) $user['id']);
+        if (!$offers) {
+            $this->telegram->call('sendMessage', ['chat_id' => $chatId, 'text' => '📋 Non hai ancora pubblicato offerte. Usa /pubblica.']);
+            return;
+        }
+        $base = rtrim((string) ($this->config['app']['base_url'] ?? ''), '/');
+        foreach ($offers as $offer) {
+            $jobId = (int) $offer['job_id'];
+            $this->telegram->call('sendMessage', [
+                'chat_id' => $chatId,
+                'text' => '🏪 <b>' . self::html(mb_strtoupper((string) $offer['business_name'])) . '</b>'
+                    . "\n💼 " . self::html($offer['role']) . "\n🆔 Offerta #{$jobId}",
+                'parse_mode' => 'HTML',
+                'reply_markup' => ['inline_keyboard' => [[[
+                    'text' => '📊 Dashboard candidati',
+                    'url' => $base . '/webapp/dashboard.html?job_id=' . $jobId,
+                ]]],
+            ]);
+        }
+    }
+
+    /** @param array<string,mixed> $user */
+    private function sendPremium(array $user, int|string $chatId): void
+    {
+        $profile = isset($user['id']) ? (new HorecaRepository($this->db))->candidateProfile((int) $user['id']) : null;
+        if (!$profile) {
+            $this->telegram->call('sendMessage', ['chat_id' => $chatId, 'text' => 'Crea prima il profilo gratuito con /registrati.']);
+            return;
+        }
+        $this->telegram->call('sendMessage', [
+            'chat_id' => $chatId,
+            'text' => "💎 <b>CANDIDATO PREMIUM</b>\n\n⚡ Notifiche immediate delle offerte compatibili\n⭐ Profilo mostrato prima ai titolari\n🏷️ Badge Premium\n\nCosto: 100 Telegram Stars per 30 giorni.",
+            'parse_mode' => 'HTML',
+            'reply_markup' => ['inline_keyboard' => [[[
+                'text' => '🌟 Attiva con 100 Stars', 'callback_data' => 'pay_stars',
+            ]]],
+        ]);
+    }
+
+    /** @param array<string,mixed> $query */
+    private function handlePreCheckout(array $query): void
+    {
+        $payload = (string) ($query['invoice_payload'] ?? '');
+        $currency = (string) ($query['currency'] ?? '');
+        $amount = (int) ($query['total_amount'] ?? 0);
+        $userId = (int) ($query['from']['id'] ?? 0);
+        $valid = $payload === 'premium_subscription_stars' && $currency === 'XTR' && $amount === 100
+            && $userId > 0 && (new HorecaRepository($this->db))->candidateProfile($userId) !== null;
+        $parameters = ['pre_checkout_query_id' => (string) ($query['id'] ?? ''), 'ok' => $valid];
+        if (!$valid) {
+            $parameters['error_message'] = 'Pagamento non riconosciuto oppure profilo candidato mancante.';
+        }
+        $this->telegram->call('answerPreCheckoutQuery', $parameters);
+    }
+
+    /** @param array<string,mixed> $user @param array<string,mixed> $payment */
+    private function handleSuccessfulPayment(array $user, int|string $chatId, array $payment): void
+    {
+        $expiry = (new HorecaRepository($this->db))->activatePremiumPayment(
+            (int) $user['id'], (string) ($payment['telegram_payment_charge_id'] ?? ''),
+            (string) ($payment['invoice_payload'] ?? ''), (string) ($payment['currency'] ?? ''),
+            (int) ($payment['total_amount'] ?? 0)
+        );
+        if ($expiry === null) {
+            return;
+        }
+        $this->telegram->call('sendMessage', [
+            'chat_id' => $chatId,
+            'text' => '🎉 Pagamento ricevuto. Premium attivo fino al <b>' . self::html($expiry) . '</b>.',
+            'parse_mode' => 'HTML',
+        ]);
+    }
+
+    private function isAdmin(int $userId): bool
+    {
+        return in_array($userId, array_map('intval', (array) ($this->config['telegram']['admin_ids'] ?? [])), true);
     }
 
     /** @param array<string,mixed> $message @param array<string,mixed> $user */
@@ -274,6 +413,22 @@ final class WebhookHandler
         $repository = new HorecaRepository($this->db);
         $candidateId = (int) $user['id'];
         $chatId = $candidateId;
+        if ($data === 'pay_stars') {
+            if (!$repository->candidateProfile($candidateId)) {
+                $this->telegram->call('sendMessage', ['chat_id' => $chatId, 'text' => 'Crea prima il profilo candidato con /registrati.']);
+                return;
+            }
+            $this->telegram->call('sendInvoice', [
+                'chat_id' => $chatId,
+                'title' => 'Candidato Premium Horeca (30 giorni)',
+                'description' => 'Notifiche immediate e profilo prioritario per 30 giorni.',
+                'payload' => 'premium_subscription_stars',
+                'provider_token' => '',
+                'currency' => 'XTR',
+                'prices' => [['label' => 'Premium 30 giorni', 'amount' => 100]],
+            ]);
+            return;
+        }
         if (preg_match('/^apply_start:(\d+)$/', $data, $match)) {
             $jobId = (int) $match[1];
             if (!$repository->candidateProfile($candidateId)) {

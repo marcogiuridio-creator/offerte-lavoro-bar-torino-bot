@@ -59,6 +59,18 @@ class HorecaMigrationTests(unittest.TestCase):
         self.assertLess(delete_original, attach)
         self.assertIn("$repository->rollbackFreeJob", source[attach:])
 
+    def test_aruba_webhook_keeps_core_profiles_offers_admin_and_stars_flows(self):
+        handler = (Path(__file__).parent / "horeca" / "src" / "WebhookHandler.php").read_text()
+        repository = (Path(__file__).parent / "horeca" / "src" / "HorecaRepository.php").read_text()
+        for command in ("/profilo", "/mie_offerte", "/premium", "/stats"):
+            self.assertIn(command, handler)
+        for marker in ("pre_checkout_query", "answerPreCheckoutQuery", "successful_payment", "sendInvoice"):
+            self.assertIn(marker, handler)
+        self.assertIn("premium_subscription_stars", handler)
+        self.assertIn("activatePremiumPayment", repository)
+        self.assertIn("INSERT IGNORE INTO payment_events", repository)
+        self.assertIn("DATE_ADD", repository)
+
     def test_aruba_package_contains_webapp_and_no_local_secrets(self):
         repository = Path(__file__).parent
         with tempfile.TemporaryDirectory() as tmp:
