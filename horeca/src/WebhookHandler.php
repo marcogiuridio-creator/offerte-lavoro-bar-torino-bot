@@ -102,7 +102,7 @@ final class WebhookHandler
                 'chat_id' => $chatId, 'text' => 'Non hai ancora un profilo candidato.',
                 'reply_markup' => ['inline_keyboard' => [[[
                     'text' => '👤 Crea il profilo gratuito', 'web_app' => ['url' => $base . '/webapp/index.html'],
-                ]]],
+                ]]]],
             ]);
             return;
         }
@@ -117,7 +117,7 @@ final class WebhookHandler
             'parse_mode' => 'HTML',
             'reply_markup' => ['inline_keyboard' => [[[
                 'text' => '✏️ Modifica profilo', 'web_app' => ['url' => $base . '/webapp/index.html'],
-            ]]],
+            ]]]],
         ]);
     }
 
@@ -143,7 +143,7 @@ final class WebhookHandler
                 'reply_markup' => ['inline_keyboard' => [[[
                     'text' => '📊 Dashboard candidati',
                     'url' => $base . '/webapp/dashboard.html?job_id=' . $jobId,
-                ]]],
+                ]]]],
             ]);
         }
     }
@@ -162,7 +162,7 @@ final class WebhookHandler
             'parse_mode' => 'HTML',
             'reply_markup' => ['inline_keyboard' => [[[
                 'text' => '🌟 Attiva con 100 Stars', 'callback_data' => 'pay_stars',
-            ]]],
+            ]]]],
         ]);
     }
 
