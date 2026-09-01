@@ -86,6 +86,16 @@ class HorecaMigrationTests(unittest.TestCase):
             self.assertIn(marker, handler)
         self.assertIn("premium_subscription_stars", handler)
 
+    def test_publish_command_opens_private_chat_and_uses_senddata_compatible_keyboard(self):
+        handler = (Path(__file__).parent / "horeca" / "src" / "WebhookHandler.php").read_text()
+        self.assertIn("['pubblica', 'offerta']", handler)
+        self.assertIn("sendPublishLauncher", handler)
+        self.assertIn("'https://t.me/' . $username . '?start=pubblica'", handler)
+        launcher = handler[handler.index("private function sendPublishLauncher"):]
+        self.assertIn("'keyboard' =>", launcher)
+        self.assertIn("'web_app' => ['url' => $base . '/webapp/pubblica.html']", launcher)
+        self.assertNotIn("'inline_keyboard' => [[['text' => $label, 'web_app'", launcher)
+
     def test_aruba_paid_promotions_and_cron_are_present(self):
         root = Path(__file__).parent
         repository = (root / "horeca/src/HorecaRepository.php").read_text()

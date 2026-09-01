@@ -42,7 +42,10 @@ final class WebhookHandler
 
         $command = strtolower((string) strtok($text, " \n"));
         $command = preg_replace('/@[^\s]+$/', '', $command) ?? $command;
-        if ($command === '/start' || $command === '/help') {
+        $argument = trim((string) substr($text, strlen((string) strtok($text, " \n"))));
+        if ($command === '/start' && in_array(strtolower($argument), ['pubblica', 'offerta'], true)) {
+            $this->sendPublishLauncher($chatId, (string) ($message['chat']['type'] ?? 'private'));
+        } elseif ($command === '/start' || $command === '/help') {
             $this->telegram->call('sendMessage', [
                 'chat_id' => $chatId,
                 'text' => "👋 Benvenuto nel bot Offerte Lavoro Ho.Re.Ca. Torino.\n\n👤 Cerchi lavoro? Usa /registrati\n🏪 Cerchi personale? Usa /pubblica\n📋 Regole: /regole",
@@ -52,16 +55,14 @@ final class WebhookHandler
                 'chat_id' => $chatId,
                 'text' => "📌 Nel gruppo sono ammesse solo offerte di lavoro Ho.Re.Ca.\n\nChi cerca lavoro si registra gratuitamente con /registrati. I datori pubblicano con /pubblica per ottenere maggiore visibilità, candidature rapide e dashboard.",
             ]);
-        } elseif ($command === '/registrati' || $command === '/pubblica') {
+        } elseif ($command === '/pubblica' || $command === '/offerta') {
+            $this->sendPublishLauncher($chatId, (string) ($message['chat']['type'] ?? 'private'));
+        } elseif ($command === '/registrati') {
             $base = rtrim((string) ($this->config['app']['base_url'] ?? ''), '/');
-            $page = $command === '/registrati' ? 'webapp/index.html' : 'webapp/pubblica.html';
-            $label = $command === '/registrati' ? '👤 Apri registrazione candidato' : '📢 Apri modulo pubblicazione';
             $this->telegram->call('sendMessage', [
                 'chat_id' => $chatId,
-                'text' => $command === '/registrati'
-                    ? 'Registrati gratuitamente e ricevi offerte compatibili.'
-                    : 'Pubblica con il bot: offerta più visibile, candidatura rapida e dashboard.',
-                'reply_markup' => ['inline_keyboard' => [[['text' => $label, 'web_app' => ['url' => $base . '/' . $page]]]]],
+                'text' => 'Registrati gratuitamente e ricevi offerte compatibili.',
+                'reply_markup' => ['inline_keyboard' => [[['text' => '👤 Apri registrazione candidato', 'web_app' => ['url' => $base . '/webapp/index.html']]]]],
             ]);
         } elseif ($command === '/profilo') {
             $this->sendProfile((array) ($message['from'] ?? []), $chatId);
@@ -93,6 +94,37 @@ final class WebhookHandler
             && isset($message['from']) && is_array($message['from'])) {
             $this->handleAutomaticOffer($message, $message['from'], $chatId, $text);
         }
+    }
+
+    private function sendPublishLauncher(int|string $chatId, string $chatType): void
+    {
+        $base = rtrim((string) ($this->config['app']['base_url'] ?? ''), '/');
+        $label = '📢 Apri modulo pubblicazione';
+        if ($chatType !== 'private') {
+            $username = ltrim((string) ($this->config['telegram']['bot_username'] ?? 'lavorotorinobot'), '@');
+            $this->telegram->call('sendMessage', [
+                'chat_id' => $chatId,
+                'text' => 'Per pubblicare apri la chat privata con il bot.',
+                'reply_markup' => ['inline_keyboard' => [[[
+                    'text' => '💬 Apri il bot e pubblica',
+                    'url' => 'https://t.me/' . $username . '?start=pubblica',
+                ]]]],
+            ]);
+            return;
+        }
+
+        // Telegram.WebApp.sendData funziona con le Mini App aperte da una
+        // reply keyboard. Il webhook ricevera quindi web_app_data e pubblichera
+        // l'annuncio con lo stesso flusso autenticato gia in uso.
+        $this->telegram->call('sendMessage', [
+            'chat_id' => $chatId,
+            'text' => 'Compila il modulo: al termine il bot pubblicherà l’annuncio e ti confermerà il numero dell’offerta.',
+            'reply_markup' => [
+                'keyboard' => [[['text' => $label, 'web_app' => ['url' => $base . '/webapp/pubblica.html']]]],
+                'resize_keyboard' => true,
+                'one_time_keyboard' => true,
+            ],
+        ]);
     }
 
     /** @param array<string,mixed> $user */

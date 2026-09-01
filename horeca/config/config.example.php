@@ -10,6 +10,7 @@ return [
     ],
     'telegram' => [
         'bot_token' => 'INSERIRE_SU_ARUBA',
+        'bot_username' => 'lavorotorinobot',
         'webhook_secret' => 'GENERARE_UN_VALORE_CASUALE',
         'group_id' => 0,
         'admin_ids' => [21773014],
