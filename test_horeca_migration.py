@@ -74,6 +74,11 @@ class HorecaMigrationTests(unittest.TestCase):
         source = (Path(__file__).parent / "horeca" / "src" / "WebhookHandler.php").read_text()
         self.assertIn("deleteGroupCommandAfterDelay", source)
         self.assertIn("usleep(7_000_000)", source)
+        self.assertIn("$mustDeleteGroupCommand", source)
+        self.assertIn("} finally {", source)
+        dispatch = source.index("try {", source.index("$mustDeleteGroupCommand"))
+        cleanup = source.index("$this->deleteGroupCommandAfterDelay", dispatch)
+        self.assertIn("finally", source[dispatch:cleanup])
         cleanup = source.index("private function deleteGroupCommandAfterDelay")
         self.assertIn("deleteMessage", source[cleanup:])
 

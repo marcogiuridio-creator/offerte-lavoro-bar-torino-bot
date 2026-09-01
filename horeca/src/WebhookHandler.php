@@ -43,46 +43,53 @@ final class WebhookHandler
         $command = strtolower((string) strtok($text, " \n"));
         $command = preg_replace('/@[^\s]+$/', '', $command) ?? $command;
         $argument = trim((string) substr($text, strlen((string) strtok($text, " \n"))));
-        if ($command === '/start' && in_array(strtolower($argument), ['pubblica', 'offerta'], true)) {
+        $mustDeleteGroupCommand = str_starts_with($command, '/')
+            && (int) $chatId === (int) ($this->config['telegram']['group_id'] ?? 0)
+            && isset($message['message_id']);
+
+        try {
+            if ($command === '/start' && in_array(strtolower($argument), ['pubblica', 'offerta'], true)) {
             $this->sendPublishLauncher($chatId, (string) ($message['chat']['type'] ?? 'private'));
-        } elseif ($command === '/start' || $command === '/help') {
+            } elseif ($command === '/start' || $command === '/help') {
             $this->telegram->call('sendMessage', [
                 'chat_id' => $chatId,
                 'text' => "👋 Benvenuto nel bot Offerte Lavoro Ho.Re.Ca. Torino.\n\n👤 Cerchi lavoro? Usa /registrati\n🏪 Cerchi personale? Usa /pubblica\n📋 Regole: /regole",
             ]);
-        } elseif ($command === '/regole') {
+            } elseif ($command === '/regole') {
             $this->telegram->call('sendMessage', [
                 'chat_id' => $chatId,
                 'text' => "📌 Nel gruppo sono ammesse solo offerte di lavoro Ho.Re.Ca.\n\nChi cerca lavoro si registra gratuitamente con /registrati. I datori pubblicano con /pubblica per ottenere maggiore visibilità, candidature rapide e dashboard.",
             ]);
-        } elseif ($command === '/pubblica' || $command === '/offerta') {
+            } elseif ($command === '/pubblica' || $command === '/offerta') {
             $this->sendPublishLauncher($chatId, (string) ($message['chat']['type'] ?? 'private'));
-        } elseif ($command === '/registrati') {
+            } elseif ($command === '/registrati') {
             $base = rtrim((string) ($this->config['app']['base_url'] ?? ''), '/');
             $this->telegram->call('sendMessage', [
                 'chat_id' => $chatId,
                 'text' => 'Registrati gratuitamente e ricevi offerte compatibili.',
                 'reply_markup' => ['inline_keyboard' => [[['text' => '👤 Apri registrazione candidato', 'web_app' => ['url' => $base . '/webapp/index.html']]]]],
             ]);
-        } elseif ($command === '/profilo') {
+            } elseif ($command === '/profilo') {
             $this->sendProfile((array) ($message['from'] ?? []), $chatId);
-        } elseif ($command === '/mie_offerte') {
+            } elseif ($command === '/mie_offerte') {
             $this->sendUserOffers((array) ($message['from'] ?? []), $chatId);
-        } elseif ($command === '/premium') {
+            } elseif ($command === '/premium') {
             $this->sendPremium((array) ($message['from'] ?? []), $chatId);
-        } elseif ($command === '/stats' && $this->isAdmin((int) ($message['from']['id'] ?? 0))) {
+            } elseif ($command === '/stats' && $this->isAdmin((int) ($message['from']['id'] ?? 0))) {
             $totals = (new HorecaRepository($this->db))->totals();
             $this->telegram->call('sendMessage', [
                 'chat_id' => $chatId,
                 'text' => "📊 <b>Statistiche bot</b>\n\n👥 Utenti: {$totals['users']}\n📢 Offerte: {$totals['offers']}\n👤 Profili: {$totals['candidates']}\n📩 Candidature: {$totals['applications']}",
                 'parse_mode' => 'HTML',
             ]);
-        }
-
-        if (str_starts_with($command, '/')
-            && (int) $chatId === (int) ($this->config['telegram']['group_id'] ?? 0)
-            && isset($message['message_id'])) {
-            $this->deleteGroupCommandAfterDelay($chatId, (int) $message['message_id']);
+            }
+        } finally {
+            // La pulizia non deve dipendere dal successo della risposta al comando:
+            // anche se Telegram rifiuta il messaggio del bot, il comando di servizio
+            // inserito nel gruppo deve sparire dopo sette secondi.
+            if ($mustDeleteGroupCommand) {
+                $this->deleteGroupCommandAfterDelay($chatId, (int) $message['message_id']);
+            }
         }
 
         $webAppData = $message['web_app_data']['data'] ?? null;
