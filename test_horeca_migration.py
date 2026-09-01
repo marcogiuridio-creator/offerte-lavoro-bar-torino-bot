@@ -63,6 +63,20 @@ class HorecaMigrationTests(unittest.TestCase):
         self.assertLess(delete_original, attach)
         self.assertIn("$repository->rollbackFreeJob", source[attach:])
 
+    def test_aruba_manual_offer_recognition_covers_common_employer_language(self):
+        source = (Path(__file__).parent / "horeca" / "src" / "WebhookHandler.php").read_text()
+        for marker in ("si\\\\s+cerca", "stiamo\\\\s+cercando", "abbiamo\\\\s+bisogno", "barback", "runner", "receptionist"):
+            self.assertIn(marker, source)
+        self.assertIn("automatic_rate_hours", source)
+        self.assertIn("automatic_daily_max", source)
+
+    def test_aruba_group_commands_are_deleted_after_seven_seconds(self):
+        source = (Path(__file__).parent / "horeca" / "src" / "WebhookHandler.php").read_text()
+        self.assertIn("deleteGroupCommandAfterDelay", source)
+        self.assertIn("usleep(7_000_000)", source)
+        cleanup = source.index("private function deleteGroupCommandAfterDelay")
+        self.assertIn("deleteMessage", source[cleanup:])
+
     def test_aruba_webhook_keeps_core_profiles_offers_admin_and_stars_flows(self):
         handler = (Path(__file__).parent / "horeca" / "src" / "WebhookHandler.php").read_text()
         repository = (Path(__file__).parent / "horeca" / "src" / "HorecaRepository.php").read_text()

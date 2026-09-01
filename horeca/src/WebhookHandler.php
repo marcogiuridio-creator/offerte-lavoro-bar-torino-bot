@@ -78,6 +78,12 @@ final class WebhookHandler
             ]);
         }
 
+        if (str_starts_with($command, '/')
+            && (int) $chatId === (int) ($this->config['telegram']['group_id'] ?? 0)
+            && isset($message['message_id'])) {
+            $this->deleteGroupCommandAfterDelay($chatId, (int) $message['message_id']);
+        }
+
         $webAppData = $message['web_app_data']['data'] ?? null;
         if (is_string($webAppData) && isset($message['from']) && is_array($message['from'])) {
             $this->handleWebAppData($message['from'], $chatId, $webAppData);
@@ -249,10 +255,11 @@ final class WebhookHandler
         $repository = new HorecaRepository($this->db);
         $fields = $this->automaticFields($text, $user);
         $result = $repository->createFreeJob(
-            $user, $fields, (int) ($this->config['limits']['rate_hours'] ?? 6),
-            (int) ($this->config['limits']['daily_max'] ?? 2)
+            $user, $fields, (int) ($this->config['limits']['automatic_rate_hours'] ?? 0),
+            (int) ($this->config['limits']['automatic_daily_max'] ?? 10)
         );
         if (!($result['ok'] ?? false)) {
+            error_log('horeca automatic conversion skipped by quota: user_id=' . (int) $user['id']);
             return;
         }
         $jobId = (int) $result['job_id'];
@@ -296,9 +303,24 @@ final class WebhookHandler
     private function looksLikeJobOffer(string $text): bool
     {
         $normalized = mb_strtolower($text);
-        $intent = preg_match('/\\b(cercasi|cerchiamo|ricerchiamo|assumiamo|selezioniamo|offerta\\s+di\\s+lavoro|ricerca\\s+personale)\\b/u', $normalized) === 1;
-        $role = preg_match('/\\b(barista|barman|bartender|camerier[ea]|cuoc[oa]|aiuto\\s+cuoc[oa]|lavapiatti|pizzaiol[oa]|chef|banconist[ae]|personale\\s+(?:di\\s+)?sala)\\b/u', $normalized) === 1;
+        $intent = preg_match('/\\b(cercasi|cerchiamo|ricerchiamo|assumiamo|selezioniamo|si\\s+cerca|stiamo\\s+cercando|serve|servono|abbiamo\\s+bisogno|offerta\\s+di\\s+lavoro|ricerca\\s+personale|ricerchiamo\\s+personale|inseriamo|da\\s+inserire)\\b/u', $normalized) === 1;
+        $role = preg_match('/\\b(barista|barman|bartender|barback|camerier[ea]|runner|commis(?:\\s+di\\s+sala)?|cuoc[oa]|aiuto\\s+cuoc[oa]|lavapiatti|pizzaiol[oa]|pasticcier[ea]|chef|banconist[ae]|receptionist|ma[iî]tre|responsabile\\s+(?:di\\s+)?sala|addett[oa]\\s+(?:di\\s+|alla\\s+)?sala|personale\\s+(?:di\\s+)?sala)\\b/u', $normalized) === 1;
         return $intent && $role;
+    }
+
+    private function deleteGroupCommandAfterDelay(int|string $chatId, int $messageId): void
+    {
+        // Mantiene visibile il comando abbastanza a lungo da far capire all'utente
+        // che è stato ricevuto, senza lasciare comandi di servizio nella chat.
+        usleep(7_000_000);
+        try {
+            $this->telegram->call('deleteMessage', [
+                'chat_id' => $chatId,
+                'message_id' => $messageId,
+            ]);
+        } catch (\Throwable $error) {
+            error_log('horeca command cleanup skipped: ' . $error->getMessage());
+        }
     }
 
     /** @param array<string,mixed> $user @return array<string,string> */
@@ -306,9 +328,13 @@ final class WebhookHandler
     {
         $roles = [
             '/\\b(?:barman|bartender)\\b/u' => 'Bartender / Barman',
+            '/\\bbarback\\b/u' => 'Barback',
             '/\\bbarista\\b/u' => 'Barista', '/\\bcamerier[ea]\\b/u' => 'Cameriere/a',
+            '/\\b(?:runner|commis(?:\\s+di\\s+sala)?|addett[oa]\\s+(?:di\\s+|alla\\s+)?sala)\\b/u' => 'Personale di sala',
+            '/\\b(?:ma[iî]tre|responsabile\\s+(?:di\\s+)?sala)\\b/u' => 'Responsabile di sala / Maître',
             '/\\b(?:cuoc[oa]|chef|aiuto\\s+cuoc[oa])\\b/u' => 'Cuoco / Aiuto Cuoco',
             '/\\blavapiatti\\b/u' => 'Lavapiatti', '/\\bpizzaiol[oa]\\b/u' => 'Pizzaiolo/a',
+            '/\\bpasticcier[ea]\\b/u' => 'Pasticciere/a', '/\\breceptionist\\b/u' => 'Receptionist',
         ];
         $role = 'Personale Horeca';
         foreach ($roles as $pattern => $label) {

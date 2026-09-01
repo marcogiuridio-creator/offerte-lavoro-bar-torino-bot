@@ -25,5 +25,9 @@ return [
     'limits' => [
         'rate_hours' => 6,
         'daily_max' => 2,
+        // I messaggi normali riconosciuti come offerte hanno limiti separati:
+        // non devono restare in chat solo perché il datore ha già pubblicato da modulo.
+        'automatic_rate_hours' => 0,
+        'automatic_daily_max' => 10,
     ],
 ];
