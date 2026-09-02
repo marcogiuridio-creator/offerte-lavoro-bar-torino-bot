@@ -29,7 +29,9 @@ final class WebhookHandler
             return;
         }
         $chatId = $message['chat']['id'] ?? null;
-        $text = trim((string) ($message['text'] ?? ''));
+        // Gli annunci arrivano sia come testo sia come didascalia di foto,
+        // locandine e documenti. Telegram usa due campi distinti.
+        $text = trim((string) ($message['text'] ?? $message['caption'] ?? ''));
         if (!is_int($chatId) && !is_string($chatId)) {
             return;
         }
@@ -341,9 +343,17 @@ final class WebhookHandler
 
     private function looksLikeJobOffer(string $text): bool
     {
-        $normalized = mb_strtolower($text);
-        $intent = preg_match('/\\b(cercasi|cerchiamo|ricerchiamo|assumiamo|selezioniamo|si\\s+cerca|stiamo\\s+cercando|serve|servono|abbiamo\\s+bisogno|offerta\\s+di\\s+lavoro|ricerca\\s+personale|ricerchiamo\\s+personale|inseriamo|da\\s+inserire)\\b/u', $normalized) === 1;
-        $role = preg_match('/\\b(barista|barman|bartender|barback|camerier[ea]|runner|commis(?:\\s+di\\s+sala)?|cuoc[oa]|aiuto\\s+cuoc[oa]|lavapiatti|pizzaiol[oa]|pasticcier[ea]|chef|banconist[ae]|receptionist|ma[iî]tre|responsabile\\s+(?:di\\s+)?sala|addett[oa]\\s+(?:di\\s+|alla\\s+)?sala|personale\\s+(?:di\\s+)?sala)\\b/u', $normalized) === 1;
+        $normalized = preg_replace('/\\s+/u', ' ', mb_strtolower(trim($text))) ?? mb_strtolower(trim($text));
+
+        // Evita i falsi positivi piu comuni dei candidati, pur permettendo a un
+        // datore di scrivere in prima persona: "cerco un cameriere".
+        $candidateIntent = preg_match('/\\b(cerco|cerca|sto\\s+cercando|sono\\s+in\\s+cerca\\s+di)\\s+(?:un\\s+)?(?:lavoro|impiego|occupazione)|\\bmi\\s+candido|\\bcandidatura\\s+(?:come|per)|\\bdisponibile\\s+(?:da|come)\\b/u', $normalized) === 1;
+        if ($candidateIntent) {
+            return false;
+        }
+
+        $intent = preg_match('/\\b(?:cercasi|cerchiamo|ricerchiamo|assumiamo|selezioniamo|selezione\\s+(?:aperta|personale)|si\\s+cerca|si\\s+ricerca|si\\s+seleziona|stiamo\\s+cercando|stiamo\\s+selezionando|siamo\\s+alla\\s+ricerca|serve|servono|servirebbe|servirebbero|mi\\s+servirebbe|mi\\s+servirebbero|avrei\\s+bisogno|avremmo\\s+bisogno|abbiamo\\s+bisogno|c(?:’|\\x{27})?e\\s+bisogno|necessitiamo|occorrerebbe|occorrerebbero|offerta\\s+di\\s+lavoro|opportunit[aà]\\s+(?:di\\s+)?lavoro|posizione\\s+aperta|ricerca\\s+(?:di\\s+)?personale|personale\\s+(?:ricercato|richiesto)|nuov[ea]\\s+assunzion[ei]|inseriamo|da\\s+inserire|cerc[oa]\\s+(?:un|una|due|tre|\\d+)\\b)/u', $normalized) === 1;
+        $role = preg_match('/\\b(?:barist[ai]|barman|barmen|barlady|bartender|barback|camerier[aei]|runner|commis(?:\\s+di\\s+sala)?|chef\\s+de\\s+rang|demi\\s+chef|cuoc[oa]|cuochi|aiut[oa]\\s+(?:cuoc[oa]|cucina)|lavapiatti|plongeur|pizzaiol[aei]|pasticcier[aei]|chef|sous\\s+chef|sushiman|grigliator[ei]|gelatier[aei]|panettier[aei]|rosticcier[ei]|banconist[aei]|cassier[aei]|sommelier|hostess|steward|receptionist|ma[iî]tre|restaurant\\s+manager|bar\\s+manager|store\\s+manager|direttor[ei]\\s+(?:di\\s+)?(?:sala|ristorante)|responsabile\\s+(?:di\\s+)?(?:sala|bar|cucina)|supervisor|addett[oaie]*\\s+(?:di\\s+|alla\\s+|alle\\s+)?(?:sala|bar|cucina|caffetteria|colazioni|accoglienza)|personale\\s+(?:di\\s+)?(?:sala|bar|cucina|ristorazione)|staff\\s+(?:di\\s+)?(?:sala|bar|cucina)|facchin[oi]|tuttofare)\\b/u', $normalized) === 1;
         return $intent && $role;
     }
 
@@ -366,14 +376,17 @@ final class WebhookHandler
     private function automaticFields(string $text, array $user): array
     {
         $roles = [
-            '/\\b(?:barman|bartender)\\b/u' => 'Bartender / Barman',
+            '/\\b(?:barman|barmen|barlady|bartender)\\b/u' => 'Bartender / Barman',
             '/\\bbarback\\b/u' => 'Barback',
-            '/\\bbarista\\b/u' => 'Barista', '/\\bcamerier[ea]\\b/u' => 'Cameriere/a',
-            '/\\b(?:runner|commis(?:\\s+di\\s+sala)?|addett[oa]\\s+(?:di\\s+|alla\\s+)?sala)\\b/u' => 'Personale di sala',
-            '/\\b(?:ma[iî]tre|responsabile\\s+(?:di\\s+)?sala)\\b/u' => 'Responsabile di sala / Maître',
-            '/\\b(?:cuoc[oa]|chef|aiuto\\s+cuoc[oa])\\b/u' => 'Cuoco / Aiuto Cuoco',
-            '/\\blavapiatti\\b/u' => 'Lavapiatti', '/\\bpizzaiol[oa]\\b/u' => 'Pizzaiolo/a',
-            '/\\bpasticcier[ea]\\b/u' => 'Pasticciere/a', '/\\breceptionist\\b/u' => 'Receptionist',
+            '/\\bbarist[ai]\\b/u' => 'Barista', '/\\bcamerier[aei]\\b/u' => 'Cameriere/a',
+            '/\\b(?:runner|commis(?:\\s+di\\s+sala)?|chef\\s+de\\s+rang|demi\\s+chef|addett[oaie]*\\s+(?:di\\s+|alla\\s+)?sala)\\b/u' => 'Personale di sala',
+            '/\\b(?:ma[iî]tre|restaurant\\s+manager|direttor[ei]\\s+(?:di\\s+)?(?:sala|ristorante)|responsabile\\s+(?:di\\s+)?sala)\\b/u' => 'Responsabile di sala / Maître',
+            '/\\b(?:bar\\s+manager|responsabile\\s+(?:di\\s+)?bar)\\b/u' => 'Bar Manager',
+            '/\\b(?:cuoc[oa]|cuochi|chef|sous\\s+chef|aiut[oa]\\s+(?:cuoc[oa]|cucina))\\b/u' => 'Cuoco / Aiuto Cuoco',
+            '/\\b(?:lavapiatti|plongeur)\\b/u' => 'Lavapiatti', '/\\bpizzaiol[aei]\\b/u' => 'Pizzaiolo/a',
+            '/\\bpasticcier[aei]\\b/u' => 'Pasticciere/a', '/\\bsommelier\\b/u' => 'Sommelier',
+            '/\\b(?:hostess|steward|addett[oaie]*\\s+(?:all(?:a|e)\\s+)?accoglienza)\\b/u' => 'Accoglienza',
+            '/\\breceptionist\\b/u' => 'Receptionist',
         ];
         $role = 'Personale Horeca';
         foreach ($roles as $pattern => $label) {
@@ -382,18 +395,32 @@ final class WebhookHandler
                 break;
             }
         }
-        $zone = preg_match('/\\b(torino|moncalieri|rivoli|collegno|settimo|chieri|lingotto|mirafiori|san\\s+donato|cit\\s+turin)\\b/iu', $text, $match)
-            ? mb_convert_case($match[1], MB_CASE_TITLE, 'UTF-8') : 'Torino e provincia';
-        $shift = preg_match('/\\b(serale|notturn[oa]|diurno|part[ -]?time|full[ -]?time|weekend)\\b/iu', $text, $match)
-            ? mb_convert_case($match[1], MB_CASE_TITLE, 'UTF-8') : 'Da concordare';
+        $zone = 'Torino e provincia';
+        if (preg_match('/\\b(torino|moncalieri|rivoli|collegno|settimo(?:\\s+torinese)?|chieri|lingotto|mirafiori|san\\s+donato|cit\\s+turin)\\b/iu', $text, $match)
+            || preg_match('/(?:via|viale|piazza|corso|strada|localit[aà])\\s+[^,\\n]{2,60},?\\s*([^\\n,]{2,40}(?:\\s*\\([A-Z]{2}\\))?)/iu', $text, $match)) {
+            $zone = mb_convert_case(trim($match[1]), MB_CASE_TITLE, 'UTF-8');
+        }
+        $shift = 'Da concordare';
+        if (preg_match('/\\b(serale|notturn[oa]|diurno|part[ -]?time|full[ -]?time|weekend|sabato|domenica)\\b/iu', $text, $match)) {
+            $shift = mb_convert_case($match[1], MB_CASE_TITLE, 'UTF-8');
+        }
+        if (preg_match('/\\b(?:dalle?|ore)\\s*(\\d{1,2}(?::\\d{2})?)\\s*(?:alle?|[-–])\\s*(\\d{1,2}(?::\\d{2})?)/iu', $text, $hours)) {
+            $shift .= ($shift === 'Da concordare' ? '' : ' · ') . 'Dalle ' . $hours[1] . ' alle ' . $hours[2];
+        }
         $salary = preg_match('/(?:€\\s*\\d{1,4}(?:[.,]\\d{1,2})?|\\d{1,4}(?:[.,]\\d{1,2})?\\s*(?:€|euro))/iu', $text, $match)
             ? trim($match[0]) : '';
         $username = trim((string) ($user['username'] ?? ''));
+        $contact = $username !== '' ? '@' . $username : 'Profilo Telegram verificato';
+        if (preg_match('/(?:contatt[oi]|tel(?:efono)?|whatsapp|wa)\\s*[:\\-]?\\s*([^\\n:]{0,35})?\\s*[:\\-]?\\s*(\\+?39[ .-]?)?(\\d(?:[ .-]?\\d){8,10})/iu', $text, $phone)) {
+            $name = trim((string) ($phone[1] ?? ''));
+            $number = trim((string) (($phone[2] ?? '') . ($phone[3] ?? '')));
+            $contact = ($name !== '' ? $name . ': ' : '') . $number;
+        }
         return [
             'business_name' => 'Locale non specificato', 'role' => $role, 'zone' => $zone,
             'shift' => $shift, 'salary' => $salary,
             'description' => mb_substr(trim($text), 0, 1000),
-            'contact' => $username !== '' ? '@' . $username : 'Profilo Telegram verificato',
+            'contact' => $contact,
         ];
     }
 
@@ -409,6 +436,7 @@ final class WebhookHandler
             . '⏰ <b>Turni:</b> ' . self::html($fields['shift']) . "\n"
             . '💰 <b>Paga:</b> ' . self::html($fields['salary'] ?: 'Da concordare') . "\n\n"
             . '📝 <b>Descrizione e requisiti:</b>\n' . self::html($fields['description']) . "\n\n"
+            . '📞 <b>Contatto:</b> ' . self::html($fields['contact']) . "\n"
             . '👤 <b>Pubblicato da:</b> <a href="tg://user?id=' . (int) $user['id'] . '">' . $identity . "</a>\n\n"
             . '🎯 Matching attivo · ⚡ Candidatura rapida in 1-click';
     }

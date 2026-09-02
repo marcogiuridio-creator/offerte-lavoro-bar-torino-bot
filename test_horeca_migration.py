@@ -70,6 +70,17 @@ class HorecaMigrationTests(unittest.TestCase):
         self.assertIn("automatic_rate_hours", source)
         self.assertIn("automatic_daily_max", source)
 
+    def test_aruba_manual_offer_recognition_covers_real_world_variants(self):
+        source = (Path(__file__).parent / "horeca" / "src" / "WebhookHandler.php").read_text()
+        for marker in (
+            "message['caption']", "servirebbero", "avrei\\\\s+bisogno",
+            "chef\\\\s+de\\\\s+rang", "sommelier", "camerier[aei]",
+            "restaurant\\\\s+manager", "candidatura\\\\s+",
+        ):
+            self.assertIn(marker, source)
+        self.assertIn("Dalle ' . $hours[1] . ' alle ' . $hours[2]", source)
+        self.assertIn("$contact =", source)
+
     def test_aruba_group_commands_are_deleted_after_seven_seconds(self):
         source = (Path(__file__).parent / "horeca" / "src" / "WebhookHandler.php").read_text()
         self.assertIn("deleteGroupCommandAfterDelay", source)
