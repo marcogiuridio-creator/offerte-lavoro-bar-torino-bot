@@ -410,7 +410,7 @@ final class WebhookHandler
                 'reply_markup' => ['inline_keyboard' => [[[
                     'text' => '✅ Registrati gratis',
                     'url' => 'https://t.me/' . $username . '?start=registrati',
-                ]]],
+                ]]]],
             ]);
         } catch (\Throwable $error) {
             error_log('horeca candidate private invite skipped: ' . $error->getMessage());
