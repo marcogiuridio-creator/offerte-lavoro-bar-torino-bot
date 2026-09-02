@@ -13,6 +13,7 @@ return [
         'bot_username' => 'lavorotorinobot',
         'webhook_secret' => 'GENERARE_UN_VALORE_CASUALE',
         'group_id' => 0,
+        // Si imposta dal topic Telegram Annunci con /imposta_annunci.
         'admin_ids' => [21773014],
     ],
     'database' => [

@@ -84,6 +84,21 @@ final class WebhookHandler
                 'text' => "📊 <b>Statistiche bot</b>\n\n👥 Utenti: {$totals['users']}\n📢 Offerte: {$totals['offers']}\n👤 Profili: {$totals['candidates']}\n📩 Candidature: {$totals['applications']}",
                 'parse_mode' => 'HTML',
             ]);
+            } elseif ($command === '/imposta_annunci' && $this->isAdmin((int) ($message['from']['id'] ?? 0))) {
+            $threadId = (int) ($message['message_thread_id'] ?? 0);
+            if ($threadId <= 0) {
+                $this->telegram->call('sendMessage', [
+                    'chat_id' => $chatId,
+                    'text' => 'Apri il topic Annunci e invia lì /imposta_annunci.',
+                ]);
+            } else {
+                (new HorecaRepository($this->db))->setSetting('announcements_thread_id', (string) $threadId);
+                $this->telegram->call('sendMessage', [
+                    'chat_id' => $chatId,
+                    'message_thread_id' => $threadId,
+                    'text' => '✅ Questo topic è ora la sezione Annunci. Le nuove offerte saranno pubblicate qui.',
+                ]);
+            }
             }
         } finally {
             // La pulizia non deve dipendere dal successo della risposta al comando:
@@ -101,7 +116,11 @@ final class WebhookHandler
         }
         if ($text !== '' && !str_starts_with($text, '/')
             && isset($message['from']) && is_array($message['from'])) {
-            $this->handleAutomaticOffer($message, $message['from'], $chatId, $text);
+            if ($this->looksLikeJobOffer($text)) {
+                $this->handleAutomaticOffer($message, $message['from'], $chatId, $text);
+            } elseif ($this->looksLikeCandidateSearch($text)) {
+                $this->removeCandidateSearch($message, $message['from'], $chatId);
+            }
         }
     }
 
@@ -243,13 +262,13 @@ final class WebhookHandler
             );
             if (!$job) return;
             $groupId = (int) ($this->config['telegram']['group_id'] ?? 0);
-            $sent = $this->telegram->call('sendMessage', [
+            $sent = $this->telegram->call('sendMessage', $this->inAnnouncementsTopic($repository, [
                 'chat_id'=>$groupId,'text'=>$this->offerMessage($job, $user, true),'parse_mode'=>'HTML',
                 'reply_markup'=>['inline_keyboard'=>[
                     [['text'=>'📩 Candidati in 1-Click','callback_data'=>'apply_start:' . (int) $job['job_id']]],
                     [['text'=>'📊 Dashboard Candidati','url'=>rtrim((string) $this->config['app']['base_url'],'/') . '/webapp/dashboard.html?job_id=' . (int) $job['job_id']]],
                 ]],
-            ]);
+            ]));
             $messageId = (int) ($sent['result']['message_id'] ?? 0);
             $repository->attachMessage((int) $job['job_id'], $messageId);
             $this->telegram->call('pinChatMessage', ['chat_id'=>$groupId,'message_id'=>$messageId,'disable_notification'=>true]);
@@ -306,7 +325,7 @@ final class WebhookHandler
         $jobId = (int) $result['job_id'];
         $publishedMessageId = 0;
         try {
-            $sent = $this->telegram->call('sendMessage', [
+            $sent = $this->telegram->call('sendMessage', $this->inAnnouncementsTopic($repository, [
                 'chat_id' => $groupId,
                 'text' => $this->automaticOfferText($fields, $user),
                 'parse_mode' => 'HTML',
@@ -315,7 +334,7 @@ final class WebhookHandler
                     [['text' => '💬 Contatta l’autore verificato', 'url' => 'tg://user?id=' . (int) $user['id']]],
                     [['text' => '📊 Dashboard Candidati', 'url' => rtrim((string) $this->config['app']['base_url'], '/') . '/webapp/dashboard.html?job_id=' . $jobId]],
                 ]],
-            ]);
+            ]));
             $publishedMessageId = (int) ($sent['result']['message_id'] ?? 0);
             if ($publishedMessageId <= 0) {
                 throw new \RuntimeException('Telegram non ha restituito il messaggio pubblicato.');
@@ -355,6 +374,57 @@ final class WebhookHandler
         $intent = preg_match('/\\b(?:cercasi|cerchiamo|ricerchiamo|assumiamo|selezioniamo|selezione\\s+(?:aperta|personale)|si\\s+cerca|si\\s+ricerca|si\\s+seleziona|stiamo\\s+cercando|stiamo\\s+selezionando|siamo\\s+alla\\s+ricerca|serve|servono|servirebbe|servirebbero|mi\\s+servirebbe|mi\\s+servirebbero|avrei\\s+bisogno|avremmo\\s+bisogno|abbiamo\\s+bisogno|c(?:’|\\x{27})?e\\s+bisogno|necessitiamo|occorrerebbe|occorrerebbero|offerta\\s+di\\s+lavoro|opportunit[aà]\\s+(?:di\\s+)?lavoro|posizione\\s+aperta|ricerca\\s+(?:di\\s+)?personale|personale\\s+(?:ricercato|richiesto)|nuov[ea]\\s+assunzion[ei]|inseriamo|da\\s+inserire|cerc[oa]\\s+(?:un|una|due|tre|\\d+)\\b)/u', $normalized) === 1;
         $role = preg_match('/\\b(?:barist[ai]|barman|barmen|barlady|bartender|barback|camerier[aei]|runner|commis(?:\\s+di\\s+sala)?|chef\\s+de\\s+rang|demi\\s+chef|cuoc[oa]|cuochi|aiut[oa]\\s+(?:cuoc[oa]|cucina)|lavapiatti|plongeur|pizzaiol[aei]|pasticcier[aei]|chef|sous\\s+chef|sushiman|grigliator[ei]|gelatier[aei]|panettier[aei]|rosticcier[ei]|banconist[aei]|cassier[aei]|sommelier|hostess|steward|receptionist|ma[iî]tre|restaurant\\s+manager|bar\\s+manager|store\\s+manager|direttor[ei]\\s+(?:di\\s+)?(?:sala|ristorante)|responsabile\\s+(?:di\\s+)?(?:sala|bar|cucina)|supervisor|addett[oaie]*\\s+(?:di\\s+|alla\\s+|alle\\s+)?(?:sala|bar|cucina|caffetteria|colazioni|accoglienza)|personale\\s+(?:di\\s+)?(?:sala|bar|cucina|ristorazione)|staff\\s+(?:di\\s+)?(?:sala|bar|cucina)|facchin[oi]|tuttofare)\\b/u', $normalized) === 1;
         return $intent && $role;
+    }
+
+    private function looksLikeCandidateSearch(string $text): bool
+    {
+        $normalized = preg_replace('/\\s+/u', ' ', mb_strtolower(trim($text))) ?? mb_strtolower(trim($text));
+        $direct = preg_match('/\\b(?:cerco|cercando|in\\s+cerca\\s+di|alla\\s+ricerca\\s+di)\\s+(?:un\\s+|una\\s+)?(?:lavoro|impiego|occupazione|opportunit[aà])|\\b(?:sono|sn)\\s+dispon+ibil\\w*|\\bdispon+ibil\\w*\\s+(?:da\\s+subito|immediat\\w*|(?:per|x)\\s+(?:extra|turni|lavorare)|come\\s+\\w+)|\\b(?:barist[ai]|barman|barmen|bartender|camerier\\w*|cuoc\\w*|lavapiatt\\w*|banconist\\w*|pizzaiol\\w*|chef|sommelier)\\s+(?:con\\s+esperienza\\s+)?(?:cerca\\w*\\s+lavor\\w*|dispon+ibil\\w*)|\\b(?:mi\\s+candido|vorrei\\s+candidarmi|invio\\s+la\\s+mia\\s+candidatura|valuto\\s+(?:proposte|offerte)|posso\\s+iniziare|dove\\s+posso\\s+mandare\\s+(?:il\\s+)?c[vu])\\b/u', $normalized) === 1;
+        $experience = preg_match('/\\b(?:mi\\s+chiamo|ho\\s+(?:lavorato|esperienza)|allego|invio)\\b.*\\b(?:barist[ai]|barman|barmen|bartender|camerier\\w*|cuoc\\w*|lavapiatt\\w*|banconist\\w*|pizzaiol\\w*|chef|sommelier|ristorazione|c[vu]|curriculum)\\b/u', $normalized) === 1;
+        $question = preg_match('/\\b(?:qualcuno\\s+cerca|sapete\\s+se|qualche\\s+locale\\s+assume|conoscete\\s+(?:dei\\s+)?locali|ci\\s+sono\\s+offerte|avete\\s+bisogno\\s+di\\s+personale)\\b/u', $normalized) === 1;
+        $foreign = preg_match('/\\b(?:i(?:’|\\x{27})?m\\s+(?:looking\\s+for\\s+(?:a\\s+)?(?:job|work)|available)|i\\s+am\\s+available|looking\\s+for\\s+(?:a\\s+)?(?:job|work)|available\\s+for\\s+work|busco\\s+(?:trabajo|empleo)|estoy\\s+(?:buscando|disponible))\\b/u', $normalized) === 1;
+        return $direct || $experience || $question || $foreign;
+    }
+
+    /** @param array<string,mixed> $message @param array<string,mixed> $user */
+    private function removeCandidateSearch(array $message, array $user, int|string $chatId): void
+    {
+        $groupId = (int) ($this->config['telegram']['group_id'] ?? 0);
+        if ($groupId === 0 || (int) $chatId !== $groupId || !isset($message['message_id'], $user['id'])) {
+            return;
+        }
+        try {
+            $this->telegram->call('deleteMessage', [
+                'chat_id' => $groupId,
+                'message_id' => (int) $message['message_id'],
+            ]);
+        } catch (\Throwable $error) {
+            error_log('horeca candidate search deletion failed: ' . $error->getMessage());
+            return;
+        }
+        $username = ltrim((string) ($this->config['telegram']['bot_username'] ?? 'lavorotorinobot'), '@');
+        try {
+            $this->telegram->call('sendMessage', [
+                'chat_id' => (int) $user['id'],
+                'text' => '👋 Il tuo messaggio di ricerca lavoro è stato rimosso: nel gruppo sono ammesse solo offerte dei datori. Registrati gratuitamente come candidato per ricevere e trovare le offerte adatte.',
+                'reply_markup' => ['inline_keyboard' => [[[
+                    'text' => '✅ Registrati gratis',
+                    'url' => 'https://t.me/' . $username . '?start=registrati',
+                ]]],
+            ]);
+        } catch (\Throwable $error) {
+            error_log('horeca candidate private invite skipped: ' . $error->getMessage());
+        }
+    }
+
+    /** @param array<string,mixed> $parameters @return array<string,mixed> */
+    private function inAnnouncementsTopic(HorecaRepository $repository, array $parameters): array
+    {
+        $threadId = (int) ($repository->setting('announcements_thread_id') ?? 0);
+        if ($threadId > 0) {
+            $parameters['message_thread_id'] = $threadId;
+        }
+        return $parameters;
     }
 
     private function deleteGroupCommandAfterDelay(int|string $chatId, int $messageId): void
@@ -508,13 +578,13 @@ final class WebhookHandler
                 . '📝 ' . self::html($data['description'] ?? '') . "\n\n"
                 . '📞 <b>Contatto:</b> ' . self::html($data['contact'] ?? '') . "\n"
                 . '👤 <b>Pubblicato da:</b> <a href="tg://user?id=' . (int) $user['id'] . '">' . $identity . '</a>';
-            $sent = $this->telegram->call('sendMessage', [
+            $sent = $this->telegram->call('sendMessage', $this->inAnnouncementsTopic($repository, [
                 'chat_id' => $groupId, 'text' => $message, 'parse_mode' => 'HTML',
                 'reply_markup' => ['inline_keyboard' => [
                     [['text' => '📩 Candidati in 1-Click', 'callback_data' => 'apply_start:' . $jobId]],
                     [['text' => '📊 Dashboard Candidati', 'url' => rtrim((string) $this->config['app']['base_url'], '/') . '/webapp/dashboard.html?job_id=' . $jobId]],
                 ]],
-            ]);
+            ]));
             $repository->attachMessage($jobId, (int) $sent['result']['message_id']);
             $this->telegram->call('sendMessage', [
                 'chat_id' => $chatId,

@@ -22,8 +22,11 @@ final class CronRunner
             }
             foreach ($repo->dueVipBumps() as $job) {
                 if (!empty($job['message_id'])) try { $this->telegram->call('unpinChatMessage',['chat_id'=>$group,'message_id'=>(int)$job['message_id']]); } catch (\Throwable) {}
-                $sent=$this->telegram->call('sendMessage',['chat_id'=>$group,'text'=>$this->jobText($job),'parse_mode'=>'HTML',
-                    'reply_markup'=>['inline_keyboard'=>[[['text'=>'📩 Candidati in 1-Click','callback_data'=>'apply_start:'.(int)$job['job_id']]]]]]);
+                $params=['chat_id'=>$group,'text'=>$this->jobText($job),'parse_mode'=>'HTML',
+                    'reply_markup'=>['inline_keyboard'=>[[['text'=>'📩 Candidati in 1-Click','callback_data'=>'apply_start:'.(int)$job['job_id']]]]]];
+                $announcementsThread=(int)($repo->setting('announcements_thread_id')??0);
+                if ($announcementsThread>0) $params['message_thread_id']=$announcementsThread;
+                $sent=$this->telegram->call('sendMessage',$params);
                 $messageId=(int)($sent['result']['message_id']??0);
                 $this->telegram->call('pinChatMessage',['chat_id'=>$group,'message_id'=>$messageId,'disable_notification'=>true]);
                 $repo->markBumped((int)$job['job_id'],$messageId); $bumped++;

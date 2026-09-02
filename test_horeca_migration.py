@@ -93,6 +93,19 @@ class HorecaMigrationTests(unittest.TestCase):
         cleanup = source.index("private function deleteGroupCommandAfterDelay")
         self.assertIn("deleteMessage", source[cleanup:])
 
+    def test_aruba_removes_candidate_searches_and_routes_offers_to_topic(self):
+        handler = (Path(__file__).parent / "horeca" / "src" / "WebhookHandler.php").read_text()
+        repository = (Path(__file__).parent / "horeca" / "src" / "HorecaRepository.php").read_text()
+        for marker in (
+            "looksLikeCandidateSearch", "removeCandidateSearch", "cerco|cercando",
+            "qualcuno\\\\s+cerca", "looking\\\\s+for", "busco\\\\s+",
+            "/imposta_annunci", "message_thread_id", "announcements_thread_id",
+            "inAnnouncementsTopic",
+        ):
+            self.assertIn(marker, handler)
+        self.assertIn("function setting", repository)
+        self.assertIn("function setSetting", repository)
+
     def test_aruba_webhook_keeps_core_profiles_offers_admin_and_stars_flows(self):
         handler = (Path(__file__).parent / "horeca" / "src" / "WebhookHandler.php").read_text()
         repository = (Path(__file__).parent / "horeca" / "src" / "HorecaRepository.php").read_text()
