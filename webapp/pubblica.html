@@ -375,6 +375,15 @@
 
     let selectedPackage = 'free';
 
+    function setSelectValue(id, value) {
+      if (!value) return;
+      const field = document.getElementById(id);
+      if (!Array.from(field.options).some(option => option.value === value)) {
+        field.add(new Option(value, value));
+      }
+      field.value = value;
+    }
+
     // Gestione selezione pacchetto
     document.querySelectorAll('.pkg-card').forEach(card => {
       card.addEventListener('click', () => {
@@ -468,8 +477,13 @@
             }, 400);
             return;
           }
+          throw new Error(resData.error || 'update_failed');
         } catch(e) {
           console.error('Errore update_job_offer API:', e);
+          submitBtn.disabled = false;
+          submitBtn.innerText = '💾 SALVA MODIFICHE ANNUNCIO';
+          alert('❌ Non è stato possibile salvare la modifica. Il vecchio annuncio è rimasto invariato.');
+          return;
         }
       }
 
@@ -525,6 +539,8 @@
 
       if (!editingJobId) return;
 
+      document.querySelector('.section').style.display = 'none';
+
       try {
         const resp = await fetch(`${API_BASE_URL}/api/get_job_offer?job_id=${encodeURIComponent(editingJobId)}`, {headers: {'X-Telegram-Init-Data': tg ? tg.initData : ''}});
         const data = await resp.json();
@@ -538,15 +554,17 @@
           document.getElementById('submitBtn').innerText = "💾 SALVA MODIFICHE ANNUNCIO";
 
           document.getElementById('businessName').value = j.business_name || '';
-          if (j.role) document.getElementById('roleSelect').value = j.role;
-          if (j.zone) document.getElementById('zoneSelect').value = j.zone;
-          if (j.shift) document.getElementById('shiftSelect').value = j.shift;
+          setSelectValue('roleSelect', j.role);
+          setSelectValue('zoneSelect', j.zone);
+          setSelectValue('shiftSelect', j.shift);
           if (j.salary) document.getElementById('salaryInput').value = j.salary;
           if (j.description) document.getElementById('descriptionInput').value = j.description;
           if (j.contact) document.getElementById('contactInput').value = j.contact;
         }
       } catch(e) {
         console.error('Errore caricamento annuncio esistente:', e);
+        document.getElementById('submitBtn').disabled = true;
+        alert('❌ Non è stato possibile caricare questa offerta. Riaprila da /mie_offerte.');
       }
     }
 

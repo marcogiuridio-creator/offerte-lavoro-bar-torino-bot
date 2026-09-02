@@ -151,7 +151,7 @@ final class HorecaRepository
             return false;
         }
         $sql = 'UPDATE job_offers SET business_name=:business_name,role=:role,zone=:zone,
-            shift=:shift,salary=:salary,description=:description WHERE job_id=:job_id';
+            shift=:shift,salary=:salary,description=:description,contact=:contact WHERE job_id=:job_id';
         $this->db->prepare($sql)->execute([
             'business_name' => self::limited($fields['business_name'] ?? '', 255),
             'role' => self::limited($fields['role'] ?? '', 255),
@@ -159,6 +159,7 @@ final class HorecaRepository
             'shift' => self::limited($fields['shift'] ?? '', 255),
             'salary' => self::limited($fields['salary'] ?? '', 255),
             'description' => self::limited($fields['description'] ?? '', 10000),
+            'contact' => self::limited($fields['contact'] ?? '', 255),
             'job_id' => $jobId,
         ]);
         return true;

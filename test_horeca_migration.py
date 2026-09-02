@@ -106,6 +106,19 @@ class HorecaMigrationTests(unittest.TestCase):
         self.assertIn("function setting", repository)
         self.assertIn("function setSetting", repository)
 
+    def test_owner_can_open_edit_form_and_sync_the_telegram_offer(self):
+        handler = (Path(__file__).parent / "horeca/src/WebhookHandler.php").read_text()
+        api = (Path(__file__).parent / "horeca/api/index.php").read_text()
+        repository = (Path(__file__).parent / "horeca/src/HorecaRepository.php").read_text()
+        form = (Path(__file__).parent / "webapp/pubblica.html").read_text()
+        self.assertIn("✏️ Modifica offerta", handler)
+        self.assertIn("'web_app' => ['url' => $base . '/webapp/pubblica.html?edit_job_id='", handler)
+        self.assertIn("editMessageText", api)
+        self.assertIn("$repository->updateJob($jobId, (int) $previous['user_id'], true, $previous)", api)
+        self.assertIn("'contact' => self::limited", repository)
+        self.assertIn("function setSelectValue", form)
+        self.assertIn("document.querySelector('.section').style.display = 'none'", form)
+
     def test_aruba_webhook_keeps_core_profiles_offers_admin_and_stars_flows(self):
         handler = (Path(__file__).parent / "horeca" / "src" / "WebhookHandler.php").read_text()
         repository = (Path(__file__).parent / "horeca" / "src" / "HorecaRepository.php").read_text()

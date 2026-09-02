@@ -206,10 +206,16 @@ final class WebhookHandler
                 'text' => '🏪 <b>' . self::html(mb_strtoupper((string) $offer['business_name'])) . '</b>'
                     . "\n💼 " . self::html($offer['role']) . "\n🆔 Offerta #{$jobId}",
                 'parse_mode' => 'HTML',
-                'reply_markup' => ['inline_keyboard' => [[[
-                    'text' => '📊 Dashboard candidati',
-                    'url' => $base . '/webapp/dashboard.html?job_id=' . $jobId,
-                ]]]],
+                'reply_markup' => ['inline_keyboard' => [
+                    [[
+                        'text' => '✏️ Modifica offerta',
+                        'web_app' => ['url' => $base . '/webapp/pubblica.html?edit_job_id=' . $jobId],
+                    ]],
+                    [[
+                        'text' => '📊 Dashboard candidati',
+                        'url' => $base . '/webapp/dashboard.html?job_id=' . $jobId,
+                    ]],
+                ]],
             ]);
         }
     }
