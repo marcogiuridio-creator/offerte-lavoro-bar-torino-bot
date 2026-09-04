@@ -215,6 +215,10 @@ final class WebhookHandler
                         'text' => '📊 Dashboard candidati',
                         'url' => $base . '/webapp/dashboard.html?job_id=' . $jobId,
                     ]],
+                    [[
+                        'text' => '🗑 Elimina offerta',
+                        'callback_data' => 'delete_offer_confirm:' . $jobId,
+                    ]],
                 ]],
             ]);
         }
@@ -665,6 +669,63 @@ final class WebhookHandler
                 'provider_token' => '',
                 'currency' => 'XTR',
                 'prices' => [['label' => 'Premium 30 giorni', 'amount' => 100]],
+            ]);
+            return;
+        }
+        if (preg_match('/^delete_offer_confirm:(\d+)$/', $data, $match)) {
+            $jobId = (int) $match[1];
+            $job = $repository->job($jobId);
+            if (!$job || (int) $job['user_id'] !== $candidateId) {
+                $this->telegram->call('sendMessage', [
+                    'chat_id' => $chatId,
+                    'text' => 'Non puoi eliminare questa offerta.',
+                ]);
+                return;
+            }
+            $this->telegram->call('sendMessage', [
+                'chat_id' => $chatId,
+                'text' => "⚠️ Vuoi eliminare definitivamente l’offerta #{$jobId} dal gruppo?",
+                'reply_markup' => ['inline_keyboard' => [[
+                    ['text' => '✅ Sì, elimina', 'callback_data' => 'delete_offer:' . $jobId],
+                    ['text' => '❌ Annulla', 'callback_data' => 'delete_offer_cancel:' . $jobId],
+                ]]],
+            ]);
+            return;
+        }
+        if (preg_match('/^delete_offer_cancel:(\d+)$/', $data)) {
+            $this->telegram->call('sendMessage', ['chat_id' => $chatId, 'text' => 'Eliminazione annullata.']);
+            return;
+        }
+        if (preg_match('/^delete_offer:(\d+)$/', $data, $match)) {
+            $jobId = (int) $match[1];
+            $job = $repository->job($jobId);
+            if (!$job || (int) $job['user_id'] !== $candidateId) {
+                $this->telegram->call('sendMessage', [
+                    'chat_id' => $chatId,
+                    'text' => 'Non puoi eliminare questa offerta.',
+                ]);
+                return;
+            }
+            $messageId = (int) ($job['message_id'] ?? 0);
+            if ($messageId > 0) {
+                $groupId = (int) ($this->config['telegram']['group_id'] ?? 0);
+                try {
+                    $this->telegram->call('unpinChatMessage', [
+                        'chat_id' => $groupId, 'message_id' => $messageId,
+                    ]);
+                } catch (\Throwable) {
+                    // Un annuncio non fissato produce un errore innocuo.
+                }
+                $this->telegram->call('deleteMessage', [
+                    'chat_id' => $groupId, 'message_id' => $messageId,
+                ]);
+            }
+            if (!$repository->deleteOwnedJob($jobId, $candidateId)) {
+                throw new \RuntimeException('Eliminazione offerta non completata.');
+            }
+            $this->telegram->call('sendMessage', [
+                'chat_id' => $chatId,
+                'text' => "🗑 Offerta #{$jobId} eliminata dal gruppo e dalle tue offerte.",
             ]);
             return;
         }

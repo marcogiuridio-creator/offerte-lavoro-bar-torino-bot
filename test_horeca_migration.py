@@ -129,6 +129,21 @@ class HorecaMigrationTests(unittest.TestCase):
         self.assertIn("function setSelectValue", form)
         self.assertIn("document.querySelector('.section').style.display = 'none'", form)
 
+    def test_owner_can_delete_bot_published_offer_with_confirmation(self):
+        handler = (Path(__file__).parent / "horeca/src/WebhookHandler.php").read_text()
+        repository = (Path(__file__).parent / "horeca/src/HorecaRepository.php").read_text()
+        self.assertIn("🗑 Elimina offerta", handler)
+        self.assertIn("delete_offer_confirm:", handler)
+        self.assertIn("delete_offer_cancel:", handler)
+        self.assertIn("delete_offer:", handler)
+        delete_flow = handler[handler.index("if (preg_match('/^delete_offer:(") :]
+        self.assertIn("(int) $job['user_id'] !== $candidateId", delete_flow)
+        self.assertLess(delete_flow.index("deleteMessage"), delete_flow.index("deleteOwnedJob"))
+        self.assertIn("public function deleteOwnedJob", repository)
+        self.assertIn("DELETE FROM application_sessions", repository)
+        self.assertIn("DELETE FROM applications", repository)
+        self.assertIn("DELETE FROM job_offers WHERE job_id=:job_id AND user_id=:user_id", repository)
+
     def test_aruba_webhook_keeps_core_profiles_offers_admin_and_stars_flows(self):
         handler = (Path(__file__).parent / "horeca" / "src" / "WebhookHandler.php").read_text()
         repository = (Path(__file__).parent / "horeca" / "src" / "HorecaRepository.php").read_text()

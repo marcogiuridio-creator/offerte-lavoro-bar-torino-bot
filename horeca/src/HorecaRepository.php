@@ -165,6 +165,41 @@ final class HorecaRepository
         return true;
     }
 
+    /** Elimina un'offerta solo se appartiene all'utente autenticato. */
+    public function deleteOwnedJob(int $jobId, int $ownerId): bool
+    {
+        $job = $this->job($jobId);
+        if (!$job || (int) $job['user_id'] !== $ownerId) {
+            return false;
+        }
+        $this->db->beginTransaction();
+        try {
+            // Le FK non hanno ON DELETE CASCADE: rimuoviamo prima i dati figli.
+            $this->db->prepare('DELETE FROM application_sessions WHERE job_id=:job_id')
+                ->execute(['job_id' => $jobId]);
+            $this->db->prepare('DELETE FROM applications WHERE job_id=:job_id')
+                ->execute(['job_id' => $jobId]);
+            $this->db->prepare('UPDATE posts SET converted_job_id=NULL WHERE converted_job_id=:job_id')
+                ->execute(['job_id' => $jobId]);
+            $deleted = $this->db->prepare('DELETE FROM job_offers WHERE job_id=:job_id AND user_id=:user_id');
+            $deleted->execute(['job_id' => $jobId, 'user_id' => $ownerId]);
+            if ($deleted->rowCount() !== 1) {
+                $this->db->rollBack();
+                return false;
+            }
+            $this->db->prepare('UPDATE users SET offerte_count=GREATEST(offerte_count-1,0),
+                posts_today=IF(last_date=UTC_DATE(),GREATEST(posts_today-1,0),posts_today)
+                WHERE user_id=:user_id')->execute(['user_id' => $ownerId]);
+            $this->db->commit();
+            return true;
+        } catch (\Throwable $error) {
+            if ($this->db->inTransaction()) {
+                $this->db->rollBack();
+            }
+            throw $error;
+        }
+    }
+
     public function updateApplicationStatus(int $appId, int $ownerId, string $status): bool
     {
         if (!in_array($status, ['interview', 'rejected', 'hired'], true)) {
