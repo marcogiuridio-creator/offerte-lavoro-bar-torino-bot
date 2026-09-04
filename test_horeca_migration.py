@@ -81,6 +81,16 @@ class HorecaMigrationTests(unittest.TestCase):
         self.assertIn("Dalle ' . $hours[1] . ' alle ' . $hours[2]", source)
         self.assertIn("$contact =", source)
 
+    def test_aruba_manual_offer_recognition_accepts_unstructured_employer_posts(self):
+        source = (Path(__file__).parent / "horeca" / "src" / "WebhookHandler.php").read_text()
+        for marker in (
+            "$strongIntent", "$offerDetails", "locale\\\\s+(?:cerca|assume)",
+            "operator[ei]\\\\s+di\\\\s+sala", "mixologist", "sushi\\\\s+chef",
+            "extra(?:\\\\s+sala)?", "inviare|mandare|inoltrare",
+        ):
+            self.assertIn(marker, source)
+        self.assertIn("return $strongIntent || ($intent && ($role || $offerDetails));", source)
+
     def test_aruba_group_commands_are_deleted_after_seven_seconds(self):
         source = (Path(__file__).parent / "horeca" / "src" / "WebhookHandler.php").read_text()
         self.assertIn("deleteGroupCommandAfterDelay", source)
