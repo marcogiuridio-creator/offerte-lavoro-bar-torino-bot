@@ -85,20 +85,30 @@ class HorecaMigrationTests(unittest.TestCase):
         source = (Path(__file__).parent / "horeca" / "src" / "WebhookHandler.php").read_text()
         for marker in (
             "$strongIntent", "$offerDetails", "cerco|cerca|cercano|assume|assumono",
-            "operator[ei]\\\\s+di\\\\s+sala", "mixologist", "sushi\\\\s+chef",
+            "operator\\\\w*\\\\s+di\\\\s+sala", "mixologist", "sushi\\\\s+chef",
             "extra(?:\\\\s+sala)?", "inviare|mandare|inoltrare",
         ):
             self.assertIn(marker, source)
-        self.assertIn("return $strongIntent || ($intent && ($role || $offerDetails))", source)
+        self.assertIn("$score = ($role ? 3 : 0) + ($intent ? 3 : 0)", source)
 
     def test_aruba_recognizes_the_reported_missed_offers(self):
         source = (Path(__file__).parent / "horeca" / "src" / "WebhookHandler.php").read_text()
         for marker in (
-            "$compactOffer = $role && $venue && $schedule", "cerco|cerca|cercano",
+            "$score >= 5", "cerco|cerca|cercano",
             "questa\\\\s+sera", "pizzeria|pub|caffetteria", "cerco\\\\s+(?:di\\\\s+lavorare",
         ):
             self.assertIn(marker, source)
-        self.assertIn("|| $compactOffer;", source)
+        self.assertIn("return $score >= 5;", source)
+
+    def test_aruba_offer_scoring_uses_broad_vocabulary(self):
+        source = (Path(__file__).parent / "horeca" / "src" / "WebhookHandler.php").read_text()
+        for marker in (
+            "capo\\\\s+partita", "chef(?:\\\\s+de\\\\s+rang|\\\\s+de\\\\s+partie)?",
+            "camerier\\\\w*\\\\s+ai\\\\s+piani", "housekeeping", "pastry\\\\s+chef",
+            "pasticceria|panetteria|forno|enoteca", "compenso", "scrivere\\\\s+(?:in\\\\s+)?privato",
+            "$location", "$score >= 5",
+        ):
+            self.assertIn(marker, source)
 
     def test_aruba_group_commands_are_deleted_after_seven_seconds(self):
         source = (Path(__file__).parent / "horeca" / "src" / "WebhookHandler.php").read_text()
