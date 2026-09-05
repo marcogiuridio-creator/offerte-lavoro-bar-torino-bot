@@ -376,7 +376,7 @@ final class WebhookHandler
 
         // Evita i falsi positivi piu comuni dei candidati, pur permettendo a un
         // datore di scrivere in prima persona: "cerco un cameriere".
-        $candidateIntent = preg_match('/\\b(cerco|cerca|sto\\s+cercando|sono\\s+in\\s+cerca\\s+di)\\s+(?:un\\s+)?(?:lavoro|impiego|occupazione)|\\bmi\\s+candido|\\bcandidatura\\s+(?:come|per)|\\bdisponibile\\s+(?:da|come)\\b/u', $normalized) === 1;
+        $candidateIntent = preg_match('/\\b(cerco|cerca|sto\\s+cercando|sono\\s+in\\s+cerca\\s+di)\\s+(?:un[ao]?\\s+)?(?:lavoro|impiego|occupazione|posizione)|\\bcerco\\s+(?:di\\s+lavorare\\s+)?come\\b|\\bmi\\s+candido|\\bcandidatura\\s+(?:come|per)|\\bdisponibile\\s+(?:da|come)\\b/u', $normalized) === 1;
         if ($candidateIntent) {
             return false;
         }
@@ -386,10 +386,13 @@ final class WebhookHandler
         // Prima richiedevamo sempre un ruolo dalla lista: per questo annunci
         // reali come "Ristorante cerca personale, inviare CV" restavano fuori.
         $strongIntent = preg_match('/\\b(?:cercasi|cerchiamo|ricerchiamo|assumiamo|selezioniamo|si\\s+cerca|si\\s+ricerca|si\\s+seleziona|stiamo\\s+cercando|stiamo\\s+selezionando|siamo\\s+alla\\s+ricerca|ricerca\\s+(?:urgentemente\\s+)?personale|personale\\s+(?:ricercato|richiesto)|offerta\\s+(?:di\\s+)?lavoro|posizion[ei]\\s+apert[ae]|opportunit[aà]\\s+(?:di\\s+)?lavoro|nuov[ae]\\s+assunzion[ei]|we(?:\\x{27}|’)re\\s+hiring|we\\s+are\\s+hiring)\\b/u', $normalized) === 1;
-        $intent = $strongIntent || preg_match('/\\b(?:si\\s+(?:cerca|ricerca|seleziona)|serve|servono|servirebbe|servirebbero|mi\\s+servirebbe|mi\\s+servirebbero|avrei\\s+bisogno|avremmo\\s+bisogno|abbiamo\\s+bisogno|c(?:’|\\x{27})?e\\s+bisogno|necessitiamo|occorrerebbe|occorrerebbero|inseriamo|da\\s+inserire|cerc[oa]\\s+(?:un|una|uno|due|tre|\\d+)\\b|locale\\s+(?:cerca|assume)|ristorante\\s+(?:cerca|assume)|bar\\s+(?:cerca|assume))\\b/u', $normalized) === 1;
+        $intent = $strongIntent || preg_match('/\\b(?:si\\s+(?:cerca|ricerca|seleziona)|serve|servono|servirebbe|servirebbero|mi\\s+servirebbe|mi\\s+servirebbero|avrei\\s+bisogno|avremmo\\s+bisogno|abbiamo\\s+bisogno|c(?:’|\\x{27})?e\\s+bisogno|necessitiamo|occorrerebbe|occorrerebbero|inseriamo|da\\s+inserire|cerco|cerca|cercano|assume|assumono)\\b/u', $normalized) === 1;
         $role = preg_match('/\\b(?:barist[aeio]|barman|barmen|barlady|bartender|mixologist|barback|camerier[aei]|operator[ei]\\s+di\\s+sala|runner|commis(?:\\s+di\\s+(?:sala|cucina))?|chef\\s+de\\s+rang|demi\\s+chef|cuoc[ao]|cuochi|aiut[ao]\\s+(?:cuoc[ao]|cucina)|lavapiatt[io]|plongeur|pizzaiol[aei]|pasticcier[aei]|chef|sous\\s+chef|sushiman|sushi\\s+chef|grigliator[ei]|gelatier[aei]|panettier[aei]|rosticcier[ei]|banconist[aei]|cassier[aei]|sommelier|hostess|steward|receptionist|ma[iî]tre|restaurant\\s+manager|bar\\s+manager|store\\s+manager|direttor[ei]\\s+(?:di\\s+)?(?:sala|ristorante|locale)|responsabile\\s+(?:di\\s+)?(?:sala|bar|cucina)|supervisor|addett[oaie]*\\s+(?:di\\s+|alla\\s+|alle\\s+)?(?:sala|bar|cucina|caffetteria|colazioni|accoglienza|pulizie)|personale(?:\\s+(?:di|per))?\\s+(?:sala|bar|cucina|ristorazione)|staff(?:\\s+(?:di|per))?\\s+(?:sala|bar|cucina)|facchin[oi]|tuttofare|extra(?:\\s+sala)?|personale|staff|figur[ae])\\b/u', $normalized) === 1;
         $offerDetails = preg_match('/\\b(?:inviare|mandare|inoltrare)\\s+(?:il\\s+)?c[vu]|\\bcandidature?\\s+(?:a|al|alla|in|via)|\\bcontratto\\s+(?:di|a|offerto)|\\bretribuzione|\\bstipendio|\\bpaga\\s+(?:oraria|mensile)|\\bturn[oi]\\s+(?:di|da|seral|diurn|notturn)|\\bfull[ -]?time|\\bpart[ -]?time/u', $normalized) === 1;
-        return $strongIntent || ($intent && ($role || $offerDetails));
+        $venue = preg_match('/\\b(?:locale|ristorante|bar|pizzeria|pub|caffetteria|trattoria|hotel|albergo|bistrot|gastronomia|gelateria)\\b/u', $normalized) === 1;
+        $schedule = preg_match('/\\b(?:oggi|domani|questa\\s+sera|mattina|sera|serale|notturn[oa]|weekend|venerd[iì]|sabato|domenica|\\d+\\s*(?:su|\/|giorni)|ore\\s*\\d{1,2}|\\d{1,2}[.:]\\d{2}\\s*[-–]\\s*\\d{1,2}[.:]\\d{2})\\b/u', $normalized) === 1;
+        $compactOffer = $role && $venue && $schedule;
+        return $strongIntent || ($intent && ($role || $offerDetails)) || $compactOffer;
     }
 
     private function looksLikeCandidateSearch(string $text): bool

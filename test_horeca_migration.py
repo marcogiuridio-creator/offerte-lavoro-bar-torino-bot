@@ -84,12 +84,21 @@ class HorecaMigrationTests(unittest.TestCase):
     def test_aruba_manual_offer_recognition_accepts_unstructured_employer_posts(self):
         source = (Path(__file__).parent / "horeca" / "src" / "WebhookHandler.php").read_text()
         for marker in (
-            "$strongIntent", "$offerDetails", "locale\\\\s+(?:cerca|assume)",
+            "$strongIntent", "$offerDetails", "cerco|cerca|cercano|assume|assumono",
             "operator[ei]\\\\s+di\\\\s+sala", "mixologist", "sushi\\\\s+chef",
             "extra(?:\\\\s+sala)?", "inviare|mandare|inoltrare",
         ):
             self.assertIn(marker, source)
-        self.assertIn("return $strongIntent || ($intent && ($role || $offerDetails));", source)
+        self.assertIn("return $strongIntent || ($intent && ($role || $offerDetails))", source)
+
+    def test_aruba_recognizes_the_reported_missed_offers(self):
+        source = (Path(__file__).parent / "horeca" / "src" / "WebhookHandler.php").read_text()
+        for marker in (
+            "$compactOffer = $role && $venue && $schedule", "cerco|cerca|cercano",
+            "questa\\\\s+sera", "pizzeria|pub|caffetteria", "cerco\\\\s+(?:di\\\\s+lavorare",
+        ):
+            self.assertIn(marker, source)
+        self.assertIn("|| $compactOffer;", source)
 
     def test_aruba_group_commands_are_deleted_after_seven_seconds(self):
         source = (Path(__file__).parent / "horeca" / "src" / "WebhookHandler.php").read_text()
