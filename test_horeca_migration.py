@@ -135,6 +135,24 @@ class HorecaMigrationTests(unittest.TestCase):
         self.assertIn("function setting", repository)
         self.assertIn("function setSetting", repository)
 
+    def test_aruba_blocks_fake_chat_migrations_and_bans_all_actors(self):
+        handler = (Path(__file__).parent / "horeca/src/WebhookHandler.php").read_text()
+        repository = (Path(__file__).parent / "horeca/src/HorecaRepository.php").read_text()
+        for marker in (
+            "isForbiddenChatMigrationAd", "normalizeModerationText", "sender_business_bot",
+            "via_bot", "forbidden_chat_migration", "banChatMember", "revoke_messages",
+            "\u0441'=>'c'", "\u0435'=>'e'", "\u0430'=>'a'",
+        ):
+            self.assertIn(marker, handler)
+        self.assertLess(
+            handler.index("isForbiddenChatMigrationAd($text)"),
+            handler.index("$command = strtolower"),
+        )
+        self.assertIn("public function banUser", repository)
+        self.assertIn("is_banned=1", repository)
+        self.assertIn("public function recordSecurityEvent", repository)
+        self.assertIn("spam_blocked=spam_blocked+1", repository)
+
     def test_owner_can_open_edit_form_and_sync_the_telegram_offer(self):
         handler = (Path(__file__).parent / "horeca/src/WebhookHandler.php").read_text()
         api = (Path(__file__).parent / "horeca/api/index.php").read_text()

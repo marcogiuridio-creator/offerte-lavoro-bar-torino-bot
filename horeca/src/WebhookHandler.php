@@ -42,6 +42,14 @@ final class WebhookHandler
             return;
         }
 
+        // I falsi annunci di migrazione non sono mai ammessi. La verifica
+        // precede i comandi e le esenzioni admin: un bot collegato a un account
+        // legittimo viene bloccato senza bannare l'amministratore protetto.
+        if ($text !== '' && $this->isForbiddenChatMigrationAd($text)) {
+            $this->blockForbiddenChatMigration($message, $chatId, $text);
+            return;
+        }
+
         $command = strtolower((string) strtok($text, " \n"));
         $command = preg_replace('/@[^\s]+$/', '', $command) ?? $command;
         $argument = trim((string) substr($text, strlen((string) strtok($text, " \n"))));
@@ -312,6 +320,181 @@ final class WebhookHandler
     private function isAdmin(int $userId): bool
     {
         return in_array($userId, array_map('intval', (array) ($this->config['telegram']['admin_ids'] ?? [])), true);
+    }
+
+    private function normalizeModerationText(string $text): string
+    {
+        $normalized = $text;
+        if (class_exists(\Normalizer::class)) {
+            $unicode = \Normalizer::normalize($normalized, \Normalizer::FORM_KC);
+            if (is_string($unicode)) {
+                $normalized = $unicode;
+            }
+        }
+        $normalized = mb_strtolower($normalized, 'UTF-8');
+        $normalized = preg_replace('/[\x{200B}-\x{200F}\x{202A}-\x{202E}\x{2060}-\x{206F}\x{FEFF}]/u', '', $normalized)
+            ?? $normalized;
+        $normalized = strtr($normalized, [
+            'а'=>'a', 'е'=>'e', 'ё'=>'e', 'і'=>'i', 'ј'=>'j', 'о'=>'o', 'р'=>'p', 'с'=>'c',
+            'х'=>'x', 'у'=>'y', 'к'=>'k', 'м'=>'m', 'т'=>'t', 'в'=>'b', 'н'=>'h',
+            'α'=>'a', 'ε'=>'e', 'ι'=>'i', 'ο'=>'o', 'ρ'=>'p', 'τ'=>'t', 'υ'=>'y', 'χ'=>'x',
+        ]);
+        $normalized = preg_replace('/[^a-z0-9à-ÿ]+/u', ' ', $normalized) ?? $normalized;
+        return trim((string) (preg_replace('/\s+/u', ' ', $normalized) ?? $normalized));
+    }
+
+    private function isForbiddenChatMigrationAd(string $text): bool
+    {
+        $normalized = $this->normalizeModerationText($text);
+        if ($normalized === '') {
+            return false;
+        }
+        $claimsMove = preg_match(
+            '/\b(?:this|the|questa|la) chat\b.{0,45}\b(?:moving|moved|move|new|nuova|spost|trasfer)/u',
+            $normalized
+        ) === 1;
+        $claimsAdminLoss = preg_match(
+            '/\b(?:lost|lose|pers[oa]|perso\s+l\s+accesso|accesso\s+perso)\b.{0,45}'
+                . '\b(?:admin|administrator|amministratore)\b/u',
+            $normalized
+        ) === 1;
+        $recruitsToNewChat = preg_match(
+            '/\b(?:move|join|click|go|passa|passate|spostati|spostatevi|unisciti|unitevi|clicca)\b'
+                . '.{0,55}\b(?:new|nuova) chat\b/u',
+            $normalized
+        ) === 1;
+        $explicitJoin = preg_match(
+            '/\bjoin (?:the|our|a) new chat\b|\b(?:entra|unisciti|unitevi) (?:nella|alla) nuova chat\b/u',
+            $normalized
+        ) === 1;
+        return ($claimsMove && ($claimsAdminLoss || $recruitsToNewChat || $explicitJoin))
+            || ($claimsAdminLoss && ($recruitsToNewChat || $explicitJoin));
+    }
+
+    /** @param array<string,mixed> $message @return list<array<string,mixed>> */
+    private function moderationActors(array $message): array
+    {
+        $actors = [];
+        $seen = [];
+        foreach (['from', 'sender_business_bot', 'via_bot'] as $field) {
+            $actor = $message[$field] ?? null;
+            if (!is_array($actor) || !isset($actor['id'])) {
+                continue;
+            }
+            $actorId = (int) $actor['id'];
+            if (isset($seen[$actorId])) {
+                continue;
+            }
+            $seen[$actorId] = true;
+            $actors[] = $actor;
+        }
+        return $actors;
+    }
+
+    /** @param array<string,mixed> $message @return list<string> */
+    private function securityTargets(array $message): array
+    {
+        $targets = [];
+        foreach (['entities', 'caption_entities'] as $field) {
+            foreach ((array) ($message[$field] ?? []) as $entity) {
+                if (is_array($entity) && isset($entity['url']) && is_string($entity['url'])) {
+                    $targets[] = $entity['url'];
+                }
+            }
+        }
+        foreach ((array) ($message['reply_markup']['inline_keyboard'] ?? []) as $row) {
+            foreach ((array) $row as $button) {
+                if (!is_array($button)) {
+                    continue;
+                }
+                foreach (['url', 'login_url', 'web_app'] as $field) {
+                    $value = $button[$field] ?? null;
+                    $url = is_array($value) ? ($value['url'] ?? null) : $value;
+                    if (is_string($url)) {
+                        $targets[] = $url;
+                    }
+                }
+            }
+        }
+        preg_match_all('/https?:\/\/\S+|(?:t|telegram)\.me\/\S+/iu',
+            (string) ($message['text'] ?? $message['caption'] ?? ''), $matches);
+        foreach ((array) ($matches[0] ?? []) as $url) {
+            $targets[] = (string) $url;
+        }
+        return array_values(array_unique($targets));
+    }
+
+    /** @param array<string,mixed> $message */
+    private function blockForbiddenChatMigration(array $message, int|string $chatId, string $text): void
+    {
+        $groupId = (int) ($this->config['telegram']['group_id'] ?? 0);
+        if ($groupId === 0 || (int) $chatId !== $groupId || !isset($message['message_id'])) {
+            return;
+        }
+        $repository = new HorecaRepository($this->db);
+        $actors = $this->moderationActors($message);
+        $bannedIds = [];
+
+        try {
+            $this->telegram->call('deleteMessage', [
+                'chat_id' => $groupId,
+                'message_id' => (int) $message['message_id'],
+            ]);
+        } catch (\Throwable $error) {
+            error_log('horeca fake chat migration deletion failed: ' . $error->getMessage());
+        }
+
+        foreach ($actors as $actor) {
+            $actorId = (int) $actor['id'];
+            if ($this->isAdmin($actorId)) {
+                continue;
+            }
+            $repository->banUser($actor);
+            try {
+                $this->telegram->call('banChatMember', [
+                    'chat_id' => $groupId,
+                    'user_id' => $actorId,
+                    'revoke_messages' => true,
+                ]);
+                $bannedIds[] = $actorId;
+            } catch (\Throwable $error) {
+                error_log('horeca fake chat migration ban failed for ' . $actorId . ': ' . $error->getMessage());
+            }
+        }
+
+        $targets = $this->securityTargets($message);
+        $primary = $actors[0] ?? [];
+        $actorIds = array_map(static fn(array $actor): int => (int) $actor['id'], $actors);
+        $repository->recordSecurityEvent(
+            'forbidden_chat_migration',
+            isset($primary['id']) ? (int) $primary['id'] : null,
+            (string) ($primary['username'] ?? ''),
+            $chatId,
+            (int) $message['message_id'],
+            $text,
+            implode(', ', $targets),
+            'Falso cambio chat eliminato. Attori: ' . implode(', ', $actorIds)
+                . '; ban Telegram riusciti: ' . (implode(', ', $bannedIds) ?: 'nessuno')
+        );
+
+        $label = implode(', ', array_map(
+            static fn(array $actor): string => ((string) ($actor['first_name'] ?? 'Account'))
+                . ' (' . (int) $actor['id'] . ')',
+            $actors
+        ));
+        foreach ((array) ($this->config['telegram']['admin_ids'] ?? []) as $adminId) {
+            try {
+                $this->telegram->call('sendMessage', [
+                    'chat_id' => (int) $adminId,
+                    'text' => "🛡 Falso cambio chat bloccato automaticamente\n\n"
+                        . 'Mittenti: ' . ($label ?: 'non identificato') . "\n"
+                        . 'Ban eseguiti: ' . (implode(', ', $bannedIds) ?: 'nessuno') . "\n"
+                        . 'Destinazioni: ' . (implode(', ', $targets) ?: 'non esposte'),
+                ]);
+            } catch (\Throwable $error) {
+                error_log('horeca fake chat migration admin notification failed: ' . $error->getMessage());
+            }
+        }
     }
 
     /** @param array<string,mixed> $message @param array<string,mixed> $user */

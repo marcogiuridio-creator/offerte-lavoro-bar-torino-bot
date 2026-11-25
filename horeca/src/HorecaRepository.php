@@ -406,6 +406,60 @@ final class HorecaRepository
             ON DUPLICATE KEY UPDATE value=VALUES(value)')->execute(['key'=>$key,'value'=>$value]);
     }
 
+    /** @param array<string,mixed> $user */
+    public function banUser(array $user): void
+    {
+        if (!isset($user['id'])) {
+            return;
+        }
+        $sql = 'INSERT INTO users (user_id,username,first_name,last_name,is_banned)
+            VALUES (:id,:username,:first_name,:last_name,1)
+            ON DUPLICATE KEY UPDATE username=VALUES(username),first_name=VALUES(first_name),
+                last_name=VALUES(last_name),is_banned=1';
+        $this->db->prepare($sql)->execute([
+            'id' => (int) $user['id'],
+            'username' => self::limited($user['username'] ?? '', 255),
+            'first_name' => self::limited($user['first_name'] ?? '', 255),
+            'last_name' => self::limited($user['last_name'] ?? '', 255),
+        ]);
+    }
+
+    public function recordSecurityEvent(
+        string $eventType,
+        ?int $userId,
+        string $username,
+        int|string $chatId,
+        int $messageId,
+        string $visibleText,
+        string $target,
+        string $details
+    ): void {
+        $this->db->beginTransaction();
+        try {
+            $sql = 'INSERT INTO security_events
+                (event_type,user_id,username,chat_id,message_id,visible_text,target,details)
+                VALUES (:event_type,:user_id,:username,:chat_id,:message_id,:visible_text,:target,:details)';
+            $this->db->prepare($sql)->execute([
+                'event_type' => self::limited($eventType, 64),
+                'user_id' => $userId,
+                'username' => self::limited($username, 255),
+                'chat_id' => $chatId,
+                'message_id' => $messageId,
+                'visible_text' => self::limited($visibleText, 10000),
+                'target' => self::limited($target, 10000),
+                'details' => self::limited($details, 10000),
+            ]);
+            $this->db->exec('INSERT INTO stats_daily (`date`,spam_blocked) VALUES (UTC_DATE(),1)
+                ON DUPLICATE KEY UPDATE spam_blocked=spam_blocked+1');
+            $this->db->commit();
+        } catch (\Throwable $error) {
+            if ($this->db->inTransaction()) {
+                $this->db->rollBack();
+            }
+            throw $error;
+        }
+    }
+
     /** @return array<string,array{amount:int,days:int,label:string}> */
     private static function paidPackages(): array
     {
