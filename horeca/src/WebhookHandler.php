@@ -24,7 +24,7 @@ final class WebhookHandler
             $this->handleCallback($update['callback_query']);
             return;
         }
-        $message = $update['message'] ?? null;
+        $message = $update['message'] ?? $update['edited_message'] ?? null;
         if (!is_array($message)) {
             return;
         }
@@ -45,8 +45,14 @@ final class WebhookHandler
         // I falsi annunci di migrazione non sono mai ammessi. La verifica
         // precede i comandi e le esenzioni admin: un bot collegato a un account
         // legittimo viene bloccato senza bannare l'amministratore protetto.
-        if ($text !== '' && $this->isForbiddenChatMigrationAd($text)) {
+        if ((int) $chatId === (int) ($this->config['telegram']['group_id'] ?? 0)
+            && $text !== '' && $this->isForbiddenChatMigrationAd($text)) {
             $this->blockForbiddenChatMigration($message, $chatId, $text);
+            return;
+        }
+
+        // Non rispondere ai comandi degli altri bot e non riprocessare le modifiche.
+        if (isset($update['edited_message']) || !empty($message['from']['is_bot'])) {
             return;
         }
 
@@ -360,7 +366,7 @@ final class WebhookHandler
         ) === 1;
         $recruitsToNewChat = preg_match(
             '/\b(?:move|join|click|go|passa|passate|spostati|spostatevi|unisciti|unitevi|clicca)\b'
-                . '.{0,55}\b(?:new|nuova) chat\b/u',
+                . '.{0,55}\b(?:(?:new|nuova) chat|chat nuova)\b/u',
             $normalized
         ) === 1;
         $explicitJoin = preg_match(
@@ -376,7 +382,7 @@ final class WebhookHandler
     {
         $actors = [];
         $seen = [];
-        foreach (['from', 'sender_business_bot', 'via_bot'] as $field) {
+        foreach (['from', 'sender_business_bot'] as $field) {
             $actor = $message[$field] ?? null;
             if (!is_array($actor) || !isset($actor['id'])) {
                 continue;
@@ -449,7 +455,11 @@ final class WebhookHandler
             if ($this->isAdmin($actorId)) {
                 continue;
             }
-            $repository->banUser($actor);
+            try {
+                $repository->banUser($actor);
+            } catch (\Throwable $error) {
+                error_log('horeca fake chat migration database ban failed: ' . $error->getMessage());
+            }
             try {
                 $this->telegram->call('banChatMember', [
                     'chat_id' => $groupId,

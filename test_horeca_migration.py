@@ -140,13 +140,17 @@ class HorecaMigrationTests(unittest.TestCase):
         repository = (Path(__file__).parent / "horeca/src/HorecaRepository.php").read_text()
         for marker in (
             "isForbiddenChatMigrationAd", "normalizeModerationText", "sender_business_bot",
-            "via_bot", "forbidden_chat_migration", "banChatMember", "revoke_messages",
+            "edited_message", "forbidden_chat_migration", "banChatMember", "revoke_messages",
             "\u0441'=>'c'", "\u0435'=>'e'", "\u0430'=>'a'",
         ):
             self.assertIn(marker, handler)
         self.assertLess(
             handler.index("isForbiddenChatMigrationAd($text)"),
             handler.index("$command = strtolower"),
+        )
+        self.assertLess(
+            handler.index("isForbiddenChatMigrationAd($text)"),
+            handler.index("!empty($message['from']['is_bot'])"),
         )
         self.assertIn("public function banUser", repository)
         self.assertIn("is_banned=1", repository)
