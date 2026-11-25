@@ -6,6 +6,7 @@ import logging
 import json
 import asyncio
 import re
+import unicodedata
 from urllib.parse import urlencode
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
@@ -75,6 +76,166 @@ def is_admin(user_or_id) -> bool:
 def get_text(message) -> str:
     """Estrae testo dal messaggio (anche caption per foto/video)."""
     return message.text or message.caption or ""
+
+
+MODERATION_CONFUSABLES = str.maketrans({
+    # Lettere cirilliche/greche usate nelle campagne spam per aggirare i filtri.
+    "а": "a", "е": "e", "ё": "e", "і": "i", "ј": "j", "о": "o",
+    "р": "p", "с": "c", "х": "x", "у": "y", "к": "k", "м": "m",
+    "т": "t", "в": "b", "н": "h", "Α": "a", "Ε": "e", "Ι": "i",
+    "Κ": "k", "Μ": "m", "Ν": "n", "Ο": "o", "Ρ": "p", "Τ": "t",
+    "Υ": "y", "Χ": "x", "α": "a", "ε": "e", "ι": "i", "ο": "o",
+    "ρ": "p", "τ": "t", "υ": "y", "χ": "x",
+})
+ZERO_WIDTH_AND_BIDI_RE = re.compile(r"[\u200b-\u200f\u202a-\u202e\u2060-\u206f\ufeff]")
+
+
+def normalize_moderation_text(text: str) -> str:
+    """Normalizza testo e omografi Unicode prima delle regole di sicurezza."""
+    normalized = unicodedata.normalize("NFKC", text or "").casefold()
+    normalized = ZERO_WIDTH_AND_BIDI_RE.sub("", normalized)
+    normalized = normalized.translate(MODERATION_CONFUSABLES)
+    return " ".join(re.sub(r"[^a-z0-9à-ÿ]+", " ", normalized).split())
+
+
+def is_forbidden_chat_migration_ad(text: str) -> bool:
+    """Rileva falsi annunci che invitano a spostare il gruppo su un'altra chat."""
+    normalized = normalize_moderation_text(text)
+    if not normalized:
+        return False
+
+    claims_move = bool(re.search(
+        r"\b(?:this|the|questa|la) chat\b.{0,45}\b(?:moving|moved|move|new|nuova|spost|trasfer)",
+        normalized,
+    ))
+    claims_admin_loss = bool(re.search(
+        r"\b(?:lost|lose|perso|perso l|perso lo|perso accesso|accesso perso)\b.{0,45}"
+        r"\b(?:admin|administrator|amministratore)\b",
+        normalized,
+    ))
+    recruits_to_new_chat = bool(re.search(
+        r"\b(?:move|join|click|go|passa|passate|spostati|spostatevi|unisciti|unitevi|clicca)\b"
+        r".{0,55}\b(?:new|nuova) chat\b",
+        normalized,
+    ))
+    explicit_join = bool(re.search(
+        r"\bjoin (?:the|our|a) new chat\b|\b(?:entra|unisciti|unitevi) (?:nella|alla) nuova chat\b",
+        normalized,
+    ))
+
+    return (
+        claims_move and (claims_admin_loss or recruits_to_new_chat or explicit_join)
+    ) or (
+        claims_admin_loss and (recruits_to_new_chat or explicit_join)
+    )
+
+
+def moderation_actors(message):
+    """Restituisce account e bot che hanno originato il messaggio, senza duplicati."""
+    actors = []
+    seen = set()
+    for actor in (
+        getattr(message, "from_user", None),
+        getattr(message, "sender_business_bot", None),
+        getattr(message, "via_bot", None),
+    ):
+        actor_id = getattr(actor, "id", None)
+        if actor_id is None or actor_id in seen:
+            continue
+        seen.add(actor_id)
+        actors.append(actor)
+    return actors
+
+
+def message_link_targets(message):
+    """Estrae le destinazioni dei link per il registro sicurezza."""
+    targets = []
+    for entity, visible in message_link_entities(message).items():
+        target = getattr(entity, "url", None)
+        if not target and entity.type == MessageEntity.URL:
+            target = visible
+        if target and target not in targets:
+            targets.append(target)
+    return targets
+
+
+async def block_forbidden_chat_migration(message, context):
+    """Elimina il falso cambio chat e banna account/bot che lo hanno generato."""
+    actors = moderation_actors(message)
+    banned_ids = []
+    protected_ids = set(config.ADMIN_IDS)
+    own_bot_id = getattr(getattr(context, "bot", None), "id", None)
+    if own_bot_id:
+        protected_ids.add(own_bot_id)
+
+    try:
+        await message.delete()
+    except Exception as exc:
+        logger.warning(f"Impossibile eliminare falso cambio chat {message.message_id}: {exc}")
+
+    for actor in actors:
+        actor_id = int(actor.id)
+        if actor_id in protected_ids:
+            continue
+        db.upsert_user(
+            actor_id,
+            getattr(actor, "username", "") or "",
+            getattr(actor, "first_name", "") or "",
+            getattr(actor, "last_name", "") or "",
+        )
+        db.ban_user(actor_id)
+        try:
+            await context.bot.ban_chat_member(
+                chat_id=message.chat_id,
+                user_id=actor_id,
+                revoke_messages=True,
+            )
+            banned_ids.append(actor_id)
+        except Exception as exc:
+            logger.warning(f"Ban Telegram non riuscito per user_id={actor_id}: {exc}")
+
+    targets = message_link_targets(message)
+    primary = actors[0] if actors else None
+    db.record_spam_blocked()
+    db.record_security_event(
+        event_type="forbidden_chat_migration",
+        user_id=getattr(primary, "id", None),
+        username=getattr(primary, "username", "") or "",
+        chat_id=message.chat_id,
+        message_id=message.message_id,
+        visible_text=get_text(message),
+        target=", ".join(targets),
+        details=(
+            "Falso cambio chat eliminato. Attori rilevati: "
+            + ", ".join(str(actor.id) for actor in actors)
+            + "; ban Telegram riusciti: "
+            + (", ".join(map(str, banned_ids)) or "nessuno")
+        ),
+    )
+
+    actor_label = ", ".join(
+        f"{getattr(actor, 'first_name', '') or 'Account'} ({actor.id})"
+        for actor in actors
+    ) or "non identificato"
+    for admin_id in config.ADMIN_IDS:
+        try:
+            await context.bot.send_message(
+                chat_id=admin_id,
+                text=(
+                    "🛡 Falso cambio chat bloccato automaticamente\n\n"
+                    f"Mittenti: {actor_label}\n"
+                    f"Ban eseguiti: {', '.join(map(str, banned_ids)) or 'nessuno'}\n"
+                    f"Destinazioni: {', '.join(targets) or 'non esposte'}"
+                ),
+            )
+        except Exception as exc:
+            logger.warning(f"Impossibile notificare admin {admin_id}: {exc}")
+
+    logger.warning(
+        "🛡 Falso cambio chat eliminato; attori=%s ban=%s",
+        [actor.id for actor in actors],
+        banned_ids,
+    )
 
 
 def classify_group_text(text: str) -> str:
@@ -599,6 +760,13 @@ async def on_group_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # Aggiorna utente nel DB
     db.upsert_user(user_id, user.username or "", user.first_name or "", user.last_name or "")
+
+    # I falsi annunci di migrazione del gruppo non sono mai ammessi. Questa
+    # regola precede l'esenzione admin per fermare anche bot collegati a un
+    # account legittimo; gli ID admin restano comunque protetti dal ban.
+    if is_forbidden_chat_migration_ad(text):
+        await block_forbidden_chat_migration(msg, context)
+        return
 
     # Gli admin sono esenti da ogni controllo
     if is_admin(user_id):
